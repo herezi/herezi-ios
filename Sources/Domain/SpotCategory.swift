@@ -2,7 +2,7 @@ import Foundation
 
 /// `components.schemas.Category` in `api/openapi.yaml`. Raw values MUST match the contract
 /// (checked by scripts/check-api-drift.sh). 무료 여부는 카테고리가 아니라 `Spot.isFree` + `free` 필터다.
-public enum SpotCategory: String, CaseIterable, Hashable, Sendable {
+public enum SpotCategory: String, CaseIterable, Hashable, Sendable, Codable {
     case nature
     case festival
     case performance

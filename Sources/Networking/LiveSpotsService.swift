@@ -19,7 +19,12 @@ public struct LiveSpotsService: SpotsService {
 
     public func spot(id: String) async throws -> Spot {
         let escaped = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
-        let dto = try await client.get(SpotDTO.self, path: "/v1/spots/\(escaped)")
+        let dto: SpotDTO
+        do {
+            dto = try await client.get(SpotDTO.self, path: "/v1/spots/\(escaped)")
+        } catch APIError.server(status: 404, _, _) {
+            throw SpotsServiceError.notFound
+        }
         guard let spot = dto.toDomain() else {
             throw APIError.decoding("Unknown category \(dto.category)")
         }

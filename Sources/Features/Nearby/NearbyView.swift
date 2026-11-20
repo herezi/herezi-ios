@@ -7,9 +7,19 @@ import SwiftUI
 /// Rows push `Spot` values; the App layer registers `.navigationDestination(for: Spot.self)`.
 public struct NearbyView: View {
     @State private var viewModel: NearbyViewModel
+    /// 다른 화면으로 가는 입구 (App이 연결). 홈 재설계 전까지 상단 바 아이콘으로 둔다.
+    let onSearch: (() -> Void)?
+    let onSaved: (() -> Void)?
+    let onSettings: (() -> Void)?
 
-    public init(viewModel: NearbyViewModel) {
+    public init(
+        viewModel: NearbyViewModel, onSearch: (() -> Void)? = nil, onSaved: (() -> Void)? = nil,
+        onSettings: (() -> Void)? = nil
+    ) {
         _viewModel = State(initialValue: viewModel)
+        self.onSearch = onSearch
+        self.onSaved = onSaved
+        self.onSettings = onSettings
     }
 
     public var body: some View {
@@ -20,7 +30,10 @@ public struct NearbyView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .navigationTitle("지금 내 주변")
-        .toolbar { whenMenu }
+        .toolbar {
+            whenMenu
+            entryPoints
+        }
         .task {
             if viewModel.state == .idle { await viewModel.reload() }
         }
@@ -48,6 +61,25 @@ public struct NearbyView: View {
             }
         }
         .padding(.vertical, HZSpace.s2)
+    }
+
+    @ToolbarContentBuilder private var entryPoints: some ToolbarContent {
+        ToolbarItemGroup(placement: .topBarLeading) {
+            if let onSaved {
+                Button(action: onSaved) { Image(systemName: "bookmark") }
+                    .accessibilityLabel("저장")
+            }
+            if let onSettings {
+                Button(action: onSettings) { Image(systemName: "gearshape") }
+                    .accessibilityLabel("설정")
+            }
+        }
+        ToolbarItem(placement: .topBarTrailing) {
+            if let onSearch {
+                Button(action: onSearch) { Image(systemName: "magnifyingglass") }
+                    .accessibilityLabel("검색")
+            }
+        }
     }
 
     private var whenMenu: some ToolbarContent {

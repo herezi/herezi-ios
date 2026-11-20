@@ -59,3 +59,53 @@ enum TestData {
     /// 목록·지도에 나오는 항목(끝난 항목 제외).
     static var listedSpots: [Spot] { spots.filter { !$0.isEnded } }
 }
+
+/// 권한 상태를 정해 두고, 요청하면 `answer`로 바뀌는 `LocationPermissionProviding`.
+@MainActor
+final class FakeLocationPermissions: LocationPermissionProviding {
+    var permission: LocationPermission
+    let answer: LocationPermission
+    private(set) var requestCount = 0
+
+    init(_ permission: LocationPermission, answer: LocationPermission = .authorized) {
+        self.permission = permission
+        self.answer = answer
+    }
+
+    func requestWhenInUse() async -> LocationPermission {
+        requestCount += 1
+        if permission == .notDetermined { permission = answer }
+        return permission
+    }
+}
+
+/// 테스트마다 비어 있는 UserDefaults.
+func freshDefaults() -> UserDefaults {
+    let name = "herezi.tests.\(UUID().uuidString)"
+    let defaults = UserDefaults(suiteName: name)!
+    defaults.removePersistentDomain(forName: name)
+    return defaults
+}
+
+/// 상세 조회 결과를 id별로 정해 두는 서비스 (저장 목록 갱신 테스트용).
+struct ScriptedDetailService: SpotsService {
+    enum Outcome: Sendable {
+        case spot(Spot)
+        case notFound
+        case failure
+    }
+
+    struct Offline: Error {}
+
+    let outcomes: [String: Outcome]
+
+    func spots(_ query: SpotQuery) async throws -> SpotPage { SpotPage(items: []) }
+    func spotsInBounds(_ query: SpotMapQuery) async throws -> SpotMap { SpotMap(items: [], truncated: false) }
+    func spot(id: String) async throws -> Spot {
+        switch outcomes[id] {
+        case .spot(let spot): return spot
+        case .notFound: throw SpotsServiceError.notFound
+        case .failure, nil: throw Offline()
+        }
+    }
+}

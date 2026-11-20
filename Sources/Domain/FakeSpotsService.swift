@@ -37,7 +37,7 @@ public struct FakeSpotsService: SpotsService {
 
     public func spot(id: String) async throws -> Spot {
         if let failure { throw failure }
-        guard let spot = allSpots.first(where: { $0.id == id }) else { throw FakeError.notFound }
+        guard let spot = allSpots.first(where: { $0.id == id }) else { throw SpotsServiceError.notFound }
         return spot
     }
 
@@ -60,6 +60,7 @@ public struct FakeSpotsService: SpotsService {
         return dLat * dLat + dLng * dLng
     }
 
+    /// 미리보기·테스트용 일반 실패(네트워크 오류 흉내). 없는 id는 `SpotsServiceError.notFound`를 던진다.
     public enum FakeError: Error, Sendable {
         case notFound
     }

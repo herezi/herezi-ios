@@ -3,7 +3,7 @@ import Foundation
 /// A thing worth seeing near the user right now (festival, exhibition, blossom spot, ...).
 ///
 /// Mirrors `components.schemas.Spot` in `api/openapi.yaml`, but uses Swift-native types.
-public struct Spot: Identifiable, Hashable, Sendable {
+public struct Spot: Identifiable, Hashable, Sendable, Codable {
     public let id: String
     public let title: String
     public let summary: String?
@@ -61,6 +61,18 @@ public struct Spot: Identifiable, Hashable, Sendable {
     }
 }
 
+extension Spot {
+    /// 일부 값만 바꾼 사본. 상세 응답에는 `distance_m`이 없어 목록의 거리를 이어 붙일 때,
+    /// 저장 목록에서 404를 종료로 표시할 때 쓴다.
+    public func copy(distanceMeters: Int?? = nil, isEnded: Bool? = nil) -> Spot {
+        Spot(
+            id: id, title: title, summary: summary, category: category, coordinate: coordinate, address: address,
+            placeName: placeName, startsAt: startsAt, endsAt: endsAt, isFree: isFree, imageURL: imageURL,
+            source: source, sourceURL: sourceURL, fetchedAt: fetchedAt,
+            distanceMeters: distanceMeters ?? self.distanceMeters, isEnded: isEnded ?? self.isEnded)
+    }
+}
+
 /// One page of `GET /v1/spots`.
 public struct SpotPage: Hashable, Sendable {
     public let items: [Spot]
@@ -106,7 +118,7 @@ public struct CoordinateBounds: Hashable, Sendable {
 }
 
 /// WGS84 coordinate. Deliberately not `CLLocationCoordinate2D` so Domain stays framework-free.
-public struct Coordinate: Hashable, Sendable {
+public struct Coordinate: Hashable, Sendable, Codable {
     public let latitude: Double
     public let longitude: Double
 
@@ -116,5 +128,16 @@ public struct Coordinate: Hashable, Sendable {
     }
 
     /// 위치 권한이 없을 때의 기준점 서울시청 (계약 `GET /v1/spots` 설명, S0 스펙과 같은 값).
+    /// 두 좌표 사이 거리(미터, 하버사인). 저장 목록처럼 서버 거리가 없을 때 앱에서 계산한다.
+    public func distance(to other: Coordinate) -> Int {
+        let radius = 6_371_000.0
+        let lat1 = latitude * .pi / 180
+        let lat2 = other.latitude * .pi / 180
+        let dLat = lat2 - lat1
+        let dLng = (other.longitude - longitude) * .pi / 180
+        let a = sin(dLat / 2) * sin(dLat / 2) + cos(lat1) * cos(lat2) * sin(dLng / 2) * sin(dLng / 2)
+        return Int((2 * radius * atan2(sqrt(a), sqrt(1 - a))).rounded())
+    }
+
     public static let seoulCityHall = Coordinate(latitude: 37.5663, longitude: 126.9779)
 }

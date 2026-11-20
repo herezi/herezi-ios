@@ -147,3 +147,22 @@ public struct SpotImage: View {
         }
     }
 }
+
+/// List 행에서 `Spot`을 push 하는 링크. 시스템 disclosure 화살표(›) 없이 카드만 보이게 한다.
+public struct SpotRowLink<Content: View>: View {
+    let spot: Spot
+    let content: Content
+
+    public init(spot: Spot, @ViewBuilder content: () -> Content) {
+        self.spot = spot
+        self.content = content()
+    }
+
+    public var body: some View {
+        ZStack {
+            NavigationLink(value: spot) { EmptyView() }
+                .opacity(0)
+            content
+        }
+    }
+}
