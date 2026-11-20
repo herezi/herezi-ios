@@ -290,3 +290,25 @@ private struct ToastModifier: ViewModifier {
         .animation(HZMotion.base, value: toast)
     }
 }
+
+extension View {
+    /// 뷰모델의 `toastMessage: String?`를 토스트로 띄운다. 띄우면 바로 nil로 되돌린다.
+    public func hzToast(message: Binding<String?>) -> some View {
+        modifier(MessageToastModifier(message: message))
+    }
+}
+
+private struct MessageToastModifier: ViewModifier {
+    @Binding var message: String?
+    @State private var toast: HZToast?
+
+    func body(content: Content) -> some View {
+        content
+            .hzToast($toast)
+            .onChange(of: message, initial: true) { _, newValue in
+                guard let newValue else { return }
+                toast = HZToast(newValue)
+                message = nil
+            }
+    }
+}

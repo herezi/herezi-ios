@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 // herezi-api docs/design/DESIGN.md의 토큰을 코드로 옮긴 것. 값을 바꾸려면 DESIGN.md를 먼저 고친다.
 // 화면 코드는 원색값(팔레트) 대신 의미 토큰(`Color.hz.textPrimary` 등)만 쓴다.
@@ -109,12 +110,27 @@ public enum HZTextStyle: CaseIterable, Sendable {
         }
     }
 
-    /// Pretendard는 아직 번들하지 않았다(DESIGN §3). 글꼴이 없으면 SwiftUI가 시스템 글꼴로 대체하고
-    /// 크기·굵기·다이나믹 타입 비율은 그대로 지킨다. 번들하면 이 이름만 맞추면 된다.
-    static let familyName = "Pretendard"
+    var uiTextStyle: UIFont.TextStyle {
+        switch relativeTo {
+        case .largeTitle: .largeTitle
+        case .title2: .title2
+        case .title3: .title3
+        case .headline: .headline
+        case .footnote: .footnote
+        case .caption2: .caption2
+        default: .body
+        }
+    }
 
+    /// 현재 다이나믹 타입에 맞춘 크기 (relativeTo 기준 비율).
+    public var scaledSize: CGFloat {
+        UIFontMetrics(forTextStyle: uiTextStyle).scaledValue(for: size)
+    }
+
+    /// Pretendard는 아직 번들하지 않았다(DESIGN §3) — 시스템 글꼴로 크기·굵기만 맞춘다.
+    /// 화면이 다시 그려질 때 다이나믹 타입 크기를 다시 읽는다. 바로 반영돼야 하는 곳은 `.hzText(_:)`를 쓴다.
     public var font: Font {
-        Font.custom(Self.familyName, size: size, relativeTo: relativeTo).weight(weight)
+        .system(size: scaledSize, weight: weight)
     }
 }
 
@@ -124,21 +140,36 @@ extension Font {
 }
 
 public struct HZFonts: Sendable {
-    public let display = HZTextStyle.display.font
-    public let title1 = HZTextStyle.title1.font
-    public let title2 = HZTextStyle.title2.font
-    public let title3 = HZTextStyle.title3.font
-    public let body = HZTextStyle.body.font
-    public let bodyStrong = HZTextStyle.bodyStrong.font
-    public let caption = HZTextStyle.caption.font
-    public let micro = HZTextStyle.micro.font
+    public var display: Font { HZTextStyle.display.font }
+    public var title1: Font { HZTextStyle.title1.font }
+    public var title2: Font { HZTextStyle.title2.font }
+    public var title3: Font { HZTextStyle.title3.font }
+    public var body: Font { HZTextStyle.body.font }
+    public var bodyStrong: Font { HZTextStyle.bodyStrong.font }
+    public var caption: Font { HZTextStyle.caption.font }
+    public var micro: Font { HZTextStyle.micro.font }
 }
 
 extension View {
-    /// 글꼴 + 줄높이(줄 간격으로 근사)를 함께 적용한다. 예: `.hzText(.title2)`.
+    /// 글꼴(다이나믹 타입 즉시 반영) + 줄높이(줄 간격으로 근사)를 함께 적용한다. 예: `.hzText(.title2)`.
     public func hzText(_ style: HZTextStyle) -> some View {
-        font(style.font)
-            .lineSpacing(max(0, style.lineHeight - style.size * 1.2))
+        modifier(HZTextModifier(style: style))
+    }
+}
+
+private struct HZTextModifier: ViewModifier {
+    let style: HZTextStyle
+    @ScaledMetric private var size: CGFloat
+
+    init(style: HZTextStyle) {
+        self.style = style
+        _size = ScaledMetric(wrappedValue: style.size, relativeTo: style.relativeTo)
+    }
+
+    func body(content: Content) -> some View {
+        content
+            .font(.system(size: size, weight: style.weight))
+            .lineSpacing(max(0, (style.lineHeight - style.size * 1.2) * size / style.size))
     }
 }
 

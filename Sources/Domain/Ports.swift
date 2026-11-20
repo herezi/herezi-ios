@@ -82,6 +82,35 @@ public protocol SpotsService: Sendable {
     func spot(id: String) async throws -> Spot
 }
 
+/// 포트가 던지는 도메인 오류. 어댑터(HTTP 등)는 자기 오류를 이것으로 바꿔 Features가 구분할 수 있게 한다.
+public enum SpotsServiceError: Error, Sendable, Equatable {
+    /// 상세 404 — 끝났거나 없는 항목.
+    case notFound
+}
+
+/// 위치 권한 상태 (S0·S6).
+public enum LocationPermission: Sendable, Equatable {
+    /// 아직 한 번도 묻지 않음.
+    case notDetermined
+    /// 정확한 위치 허용.
+    case authorized
+    /// 대략적 위치만 허용.
+    case approximate
+    /// 거부 또는 제한.
+    case denied
+
+    /// 위치를 쓸 수 있는지.
+    public var isGranted: Bool { self == .authorized || self == .approximate }
+}
+
+/// Port: 위치 권한 상태 조회·요청. App 레이어가 CoreLocation으로 구현한다.
+@MainActor
+public protocol LocationPermissionProviding: AnyObject {
+    var permission: LocationPermission { get }
+    /// 시스템 권한 창을 띄우고 사용자가 고른 결과를 돌려준다. 이미 정해졌으면 바로 현재 상태.
+    func requestWhenInUse() async -> LocationPermission
+}
+
 /// Port: the user's current location. Implemented in the App layer with CoreLocation.
 @MainActor
 public protocol LocationProviding {

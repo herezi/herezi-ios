@@ -96,7 +96,34 @@ targets:
     dependencies:
       - target: Domain
       - target: DesignSystem
-      - target: MapUI
+
+  FeatureSaved:
+    templates: [Module]
+    sources: [Sources/Features/Saved]
+    dependencies:
+      - target: Domain
+      - target: DesignSystem
+
+  FeatureSearch:
+    templates: [Module]
+    sources: [Sources/Features/Search]
+    dependencies:
+      - target: Domain
+      - target: DesignSystem
+
+  FeatureSettings:
+    templates: [Module]
+    sources: [Sources/Features/Settings]
+    dependencies:
+      - target: Domain
+      - target: DesignSystem
+
+  FeatureOnboarding:
+    templates: [Module]
+    sources: [Sources/Features/Onboarding]
+    dependencies:
+      - target: Domain
+      - target: DesignSystem
 
   # Layer 3: composition root. Wires adapters into features.
   Herezi:
@@ -109,6 +136,10 @@ targets:
       - target: DesignSystem
       - target: FeatureNearby
       - target: FeatureSpotDetail
+      - target: FeatureSaved
+      - target: FeatureSearch
+      - target: FeatureSettings
+      - target: FeatureOnboarding
       - target: MapUI
       # MapUI가 링크하는 동적 프레임워크를 앱 번들에 임베드한다 (없으면 실행 즉시 dyld 크래시).
       - package: NMapsMap
@@ -148,6 +179,11 @@ targets:
       - target: Networking
       - target: DesignSystem
       - target: FeatureNearby
+      - target: FeatureSpotDetail
+      - target: FeatureSaved
+      - target: FeatureSearch
+      - target: FeatureSettings
+      - target: FeatureOnboarding
       - target: MapUI
     settings:
       base:

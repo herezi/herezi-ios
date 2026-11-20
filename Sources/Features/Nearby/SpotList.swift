@@ -8,10 +8,9 @@ struct SpotList: View {
 
     var body: some View {
         List(spots) { spot in
-            NavigationLink(value: spot) {
+            SpotRowLink(spot: spot) {
                 SpotCard(spot: spot)
             }
-            .buttonStyle(.plain)
             .listRowInsets(EdgeInsets())
             .listRowSeparator(.hidden)
             .listRowBackground(Color.hz.bgPrimary)
