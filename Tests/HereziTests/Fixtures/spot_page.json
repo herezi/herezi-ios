@@ -1,0 +1,40 @@
+{
+  "items": [
+    {
+      "id": "tourapi-2771234",
+      "title": "서울빛초롱축제",
+      "summary": "청계천을 따라 수백 개의 등이 불을 밝히는 겨울 축제.",
+      "category": "festival",
+      "lat": 37.5690,
+      "lng": 126.9784,
+      "address": "서울 중구 청계천로 1",
+      "place_name": "청계광장",
+      "starts_at": "2026-11-14T18:00:00+09:00",
+      "ends_at": "2026-11-30T22:00:00+09:00",
+      "is_free": true,
+      "image_url": "https://example.com/lantern.jpg",
+      "source": "tourapi",
+      "source_url": "https://korean.visitkorea.or.kr/detail/ms_detail.do?cotid=2771234",
+      "distance_m": 280
+    },
+    {
+      "id": "kopis-PF999",
+      "title": "광화문 버스킹",
+      "category": "performance",
+      "lat": 37.572,
+      "lng": 126.9769,
+      "starts_at": "2026-11-21T09:00:00.123Z",
+      "source": "kopis"
+    },
+    {
+      "id": "future-1",
+      "title": "아직 앱이 모르는 카테고리",
+      "category": "some_future_category",
+      "lat": 37.57,
+      "lng": 126.98,
+      "starts_at": "2026-11-21T09:00:00Z",
+      "source": "seoul_culture"
+    }
+  ],
+  "next_cursor": "eyJvZmZzZXQiOjMwfQ"
+}

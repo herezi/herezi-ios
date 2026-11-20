@@ -19,3 +19,6 @@ Package.resolved
 
 # 비밀값 — Config/Secrets.example.xcconfig를 복사해서 만든다
 Config/Secrets.xcconfig
+
+# XcodeGen이 project.yml의 info.properties로 생성하는 파일
+Sources/App/Info.plist

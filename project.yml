@@ -1,0 +1,154 @@
+# XcodeGen spec. The .xcodeproj is GENERATED from this file (`make generate`) and is gitignored.
+# Edit this file, never the .xcodeproj. See docs/adr/0002-xcodegen-no-checked-in-xcodeproj.md
+name: Herezi
+options:
+  bundleIdPrefix: com.herezi
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+  generateEmptyDirectories: true
+
+packages:
+  # Official Naver Maps iOS SDK SPM wrapper. See docs/adr/0003-naver-map-sdk.md
+  NMapsMap:
+    url: https://github.com/navermaps/SPM-NMapsMap
+    exactVersion: 3.24.1
+
+configFiles:
+  Debug: Config/Base.xcconfig
+  Release: Config/Base.xcconfig
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    SWIFT_TREAT_WARNINGS_AS_ERRORS: "YES"
+    GCC_TREAT_WARNINGS_AS_ERRORS: "YES"
+    # 네이버 지도 SDK 헤더(NMFUtils.h)가 iOS 26에서 deprecated된 UIScreen.mainScreen을 쓴다.
+    # Swift의 warnings-as-errors가 clang 모듈 빌드에도 -Werror로 전달되므로 이 경고만 에러에서 제외한다.
+    # 우리 Swift 코드의 deprecated 사용은 여전히 에러다. SDK가 고쳐지면 제거. (docs/adr/0003-naver-map-sdk.md)
+    OTHER_SWIFT_FLAGS: "$(inherited) -Xcc -Wno-error=deprecated-declarations"
+    ENABLE_USER_SCRIPT_SANDBOXING: "YES"
+    DEAD_CODE_STRIPPING: "YES"
+    TARGETED_DEVICE_FAMILY: "1"
+    CODE_SIGN_STYLE: Automatic
+  configs:
+    Debug:
+      HEREZI_API_BASE_URL: "http://localhost:8080"
+      # 서버 배포 전이라 Debug는 샘플 데이터(FakeSpotsService)가 기본. 스킴 환경 변수 HEREZI_FAKE_API=0으로 끌 수 있다.
+      HEREZI_USE_FAKE_API: "YES"
+    Release:
+      # TODO(tech-debt): production API host is not decided yet.
+      HEREZI_API_BASE_URL: "http://localhost:8080"
+      HEREZI_USE_FAKE_API: "NO"
+
+targetTemplates:
+  Module:
+    type: framework
+    platform: iOS
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: "YES"
+        PRODUCT_BUNDLE_IDENTIFIER: com.herezi.$(PRODUCT_NAME:rfc1034identifier)
+        SKIP_INSTALL: "YES"
+        APPLICATION_EXTENSION_API_ONLY: "NO"
+
+targets:
+  # Layer 0: pure models + ports. Foundation only.
+  Domain:
+    templates: [Module]
+    sources: [Sources/Domain]
+
+  # Layer 1: HTTP adapter for the API contract (api/openapi.yaml).
+  Networking:
+    templates: [Module]
+    sources: [Sources/Networking]
+    dependencies:
+      - target: Domain
+
+  # Layer 1: map UI component. The ONLY target allowed to import NMapsMap.
+  MapUI:
+    templates: [Module]
+    sources: [Sources/MapUI]
+    dependencies:
+      - target: Domain
+      - package: NMapsMap
+
+  # Layer 2: feature UI. Depends on Domain (ports) + MapUI, never on Networking.
+  FeatureNearby:
+    templates: [Module]
+    sources: [Sources/Features/Nearby]
+    dependencies:
+      - target: Domain
+      - target: MapUI
+
+  FeatureSpotDetail:
+    templates: [Module]
+    sources: [Sources/Features/SpotDetail]
+    dependencies:
+      - target: Domain
+      - target: MapUI
+
+  # Layer 3: composition root. Wires adapters into features.
+  Herezi:
+    type: application
+    platform: iOS
+    sources: [Sources/App]
+    dependencies:
+      - target: Domain
+      - target: Networking
+      - target: FeatureNearby
+      - target: FeatureSpotDetail
+      - target: MapUI
+      - sdk: CoreLocation.framework
+    info:
+      path: Sources/App/Info.plist
+      properties:
+        CFBundleDisplayName: Herezi
+        CFBundleShortVersionString: "0.1.0"
+        CFBundleVersion: "1"
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        NSLocationWhenInUseUsageDescription: 지금 내 주변에서 열리는 축제·공연·전시를 보여드리기 위해 현재 위치를 사용합니다.
+        HereziAPIBaseURL: $(HEREZI_API_BASE_URL)
+        HereziUseFakeAPI: $(HEREZI_USE_FAKE_API)
+        # Naver Cloud Platform Maps client ID (from Config/Secrets.xcconfig; empty is OK for build/test).
+        NMFNcpKeyId: $(NAVER_MAPS_CLIENT_ID)
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.herezi.app
+        PRODUCT_NAME: Herezi
+        ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS: "YES"
+
+  HereziTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: Tests/HereziTests
+        excludes: ["Fixtures/**"]
+      - path: Tests/HereziTests/Fixtures
+        type: folder
+        buildPhase: resources
+    dependencies:
+      - target: Domain
+      - target: Networking
+      - target: FeatureNearby
+      - target: MapUI
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: "YES"
+        PRODUCT_BUNDLE_IDENTIFIER: com.herezi.app.tests
+
+schemes:
+  Herezi:
+    build:
+      targets:
+        Herezi: all
+        HereziTests: [test]
+    test:
+      config: Debug
+      targets: [HereziTests]
+    run:
+      config: Debug

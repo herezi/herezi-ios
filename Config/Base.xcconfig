@@ -1,0 +1,6 @@
+// Shared build settings. Secrets are optional so the app builds (and tests pass) without them.
+// Naver Cloud Platform Maps client ID -> Info.plist `NMFNcpKeyId`. Empty = map shows an auth error at runtime only.
+NAVER_MAPS_CLIENT_ID =
+
+// Local, gitignored overrides. Copy Config/Secrets.example.xcconfig -> Config/Secrets.xcconfig.
+#include? "Secrets.xcconfig"
