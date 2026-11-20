@@ -5,7 +5,7 @@ import Observation
 /// State + logic for the Nearby screen. UI-free so it is unit-testable (see NearbyViewModelTests).
 @MainActor
 @Observable
-public final class NearbyViewModel {
+public final class NearbyViewModel: SpotFilterControlling {
     public enum DisplayMode: String, CaseIterable, Sendable {
         case list
         case map

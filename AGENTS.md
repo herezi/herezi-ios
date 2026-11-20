@@ -27,7 +27,8 @@ api/openapi.yaml         herezi-api 계약 사본 (make sync-api로만 갱신, �
 Sources/
   Domain/                모델·포트(SpotsService, LocationProviding)·FakeSpotsService. Foundation만 — ADR 0001
   Networking/            계약의 HTTP 어댑터 (APIClient, DTO, LiveSpotsService)
-  MapUI/                 네이버 지도 래퍼. NMapsMap을 import하는 유일한 곳 — ADR 0003
+  MapUI/                 네이버 지도 래퍼(핀·클러스터·선택 핀). NMapsMap을 import하는 유일한 곳 — ADR 0003
+                         클러스터링 계산은 Domain/MapClustering.swift(SpotClusterer, 단위 테스트)
   Features/Nearby/       "지금 내 주변" 화면 + NearbyViewModel
   Features/SpotDetail/   상세 화면
   App/                   조립(composition root), CoreLocation 어댑터
@@ -37,7 +38,8 @@ docs/adr/                결정 기록
 docs/exec-plans/         실행 계획 (active/ → completed/)
 ```
 
-의존 방향: `Domain` ← `Networking`, `MapUI` ← `Features/*` ← `App`. Features는 Networking을 모른다.
+의존 방향: `Domain` ← `Networking`, `DesignSystem` ← `MapUI` ← `Features/*` ← `App`. Features는 Networking을 모른다.
+Pretendard 글꼴은 `Resources/Fonts/`(SIL OFL 1.1, `OFL.txt` 동봉) — 앱 번들 + `UIAppFonts`.
 
 ## 명령
 

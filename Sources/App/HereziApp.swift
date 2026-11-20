@@ -40,8 +40,8 @@ final class AppModel {
         case search
         case settings
         case spot(id: String)
-        /// S1b 전체 목록 + 시작 필터.
-        case list(HomeListFilter)
+        /// S1b 전체 목록 + 시작 필터. 지도에서 다른 동네를 다시 찾았으면 그 중심·위치명.
+        case list(HomeListFilter, origin: Coordinate? = nil, placeName: String? = nil)
     }
 
     let service = AppEnvironment.makeSpotsService()
@@ -50,7 +50,7 @@ final class AppModel {
     let saved = SavedSpotsStore()
     let recents = RecentSearchesStore()
     let home: HomeViewModel
-    let map: NearbyViewModel
+    let map: MapViewModel
     var showsOnboarding: Bool
     var tab: Tab = .nearby
     var nearbyPath = NavigationPath()
@@ -59,7 +59,10 @@ final class AppModel {
 
     init() {
         home = HomeViewModel(service: service, location: location, naming: naming, saved: saved)
-        map = NearbyViewModel(service: service, location: location)
+        // 스크린리더가 켜져 있으면 시트를 펼친 채 시작한다(목록이 지도의 대안, S2 접근성).
+        map = MapViewModel(
+            service: service, location: location, naming: naming,
+            startsExpanded: UIAccessibility.isVoiceOverRunning)
         showsOnboarding = OnboardingViewModel.shouldShow(permission: location.permission)
         #if DEBUG
             DebugLaunch.apply(to: self)
@@ -84,10 +87,10 @@ final class AppModel {
         Task { await map.apply(filter) }
     }
 
-    /// S2 "목록으로 보기" → 주변 탭에서 S1b를 그 필터로.
-    func showList(_ filter: HomeListFilter) {
+    /// S2 "목록으로 보기" → 주변 탭에서 S1b를 그 필터로 (다른 동네를 다시 찾았으면 그 지도 중심 기준).
+    func showList(_ request: MapListRequest) {
         tab = .nearby
-        nearbyPath.append(Route.list(filter))
+        nearbyPath.append(Route.list(request.filter, origin: request.origin, placeName: request.placeName))
     }
 
     func goHome() {
@@ -136,8 +139,12 @@ struct RootView: View {
             .tag(AppModel.Tab.nearby)
 
             NavigationStack(path: $app.mapPath) {
-                NearbyMapScreen(viewModel: app.map, banner: banner, onShowList: app.showList)
-                    .destinations(app: app, root: self)
+                NearbyMapScreen(
+                    viewModel: app.map, banner: banner,
+                    onSearch: { app.mapPath.append(AppModel.Route.search) },
+                    onShowList: app.showList
+                )
+                .destinations(app: app, root: self)
             }
             .tabItem { Label("지도", systemImage: "map") }
             .tag(AppModel.Tab.map)
@@ -183,12 +190,12 @@ struct RootView: View {
                     osVersion: UIDevice.current.systemVersion))
         case .spot(let id):
             detail(id: id, initial: nil)
-        case .list(let filter):
+        case .list(let filter, let origin, let placeName):
             NearbyView(
                 viewModel: NearbyViewModel(
-                    service: app.service, location: app.location, filter: filter, origin: app.home.coordinate,
-                    isUsingFallbackLocation: app.home.isUsingFallbackLocation),
-                placeName: app.home.placeName ?? "내 주변", banner: banner,
+                    service: app.service, location: app.location, filter: filter, origin: origin ?? app.home.coordinate,
+                    isUsingFallbackLocation: origin == nil && app.home.isUsingFallbackLocation),
+                placeName: placeName ?? app.home.placeName ?? "내 주변", banner: banner,
                 onSearch: { app.nearbyPath.append(AppModel.Route.search) },
                 onShowMap: app.showMap)
         }
@@ -245,7 +252,7 @@ enum AppEnvironment {
 ///
 ///     xcrun simctl launch booted com.herezi.app -HZScreen search -HZSearchQuery 광화문
 ///
-/// - `-HZScreen onboarding|home|list|map|search|saved|settings|detail|detail-ended`
+/// - `-HZScreen onboarding|home|list|map|map-selected|map-moved|search|saved|settings|detail|detail-ended`
 /// - `-HZSearchQuery <검색어>`: 검색 화면을 열자마자 조회
 /// - `-HZSeedSaved YES`: 샘플 볼거리를 저장 목록에 넣는다
 enum DebugLaunch {
@@ -282,6 +289,21 @@ enum DebugLaunch {
         case "search": app.nearbyPath.append(AppModel.Route.search)
         case "list": app.nearbyPath.append(AppModel.Route.list(HomeListFilter(when: .week)))
         case "map": app.tab = .map
+        case "map-selected":
+            app.tab = .map
+            Task {
+                await app.map.start()
+                app.map.select("sample-1")
+            }
+        case "map-moved":
+            app.tab = .map
+            Task {
+                await app.map.start()
+                try? await Task.sleep(for: .seconds(2))
+                #if DEBUG
+                    app.map.debugPan(to: Coordinate(latitude: 37.5760, longitude: 126.9800))
+                #endif
+            }
         case "saved": app.tab = .saved
         case "settings":
             app.tab = .saved

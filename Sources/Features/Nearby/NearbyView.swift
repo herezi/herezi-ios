@@ -175,7 +175,7 @@ public struct NearbyView: View {
 
 /// 기간 탭 + 칩 줄 (S1b·S2 공통).
 struct NearbyFilters: View {
-    let viewModel: NearbyViewModel
+    let viewModel: any SpotFilterControlling
 
     var body: some View {
         VStack(spacing: 0) {
@@ -219,87 +219,31 @@ struct WhenTabs: View {
     }
 }
 
-/// S2 지도 탭. 기간 탭·칩 + 네이버 지도 + "목록으로 보기".
-public struct NearbyMapScreen: View {
-    @State private var viewModel: NearbyViewModel
-    let banner: LocationBannerConfig?
-    let onShowList: ((HomeListFilter) -> Void)?
-
-    public init(
-        viewModel: NearbyViewModel, banner: LocationBannerConfig? = nil,
-        onShowList: ((HomeListFilter) -> Void)? = nil
-    ) {
-        _viewModel = State(initialValue: viewModel)
-        self.banner = banner
-        self.onShowList = onShowList
-    }
-
-    public var body: some View {
-        VStack(spacing: 0) {
-            NearbyFilters(viewModel: viewModel)
-            if viewModel.isUsingFallbackLocation, let banner {
-                LocationBanner(actionTitle: banner.actionTitle, action: banner.action)
-                    .padding(.vertical, HZSpace.s2)
-            }
-            NearbyMap(spots: viewModel.visibleSpots, center: viewModel.coordinate ?? .seoulCityHall)
-                .overlay(alignment: .bottom) {
-                    if let onShowList {
-                        FloatingPill(title: "목록으로 보기", symbol: "list.bullet") {
-                            onShowList(viewModel.currentFilter)
-                        }
-                        .padding(.bottom, HZSpace.s4)
-                    }
-                }
-        }
-        .background(Color.hz.bgPrimary)
-        .toolbar(.hidden, for: .navigationBar)
-        .task {
-            if viewModel.state == .idle { await viewModel.reload() }
-        }
-    }
-}
-
-/// Map mode: Naver map (via MapUI) + a bottom card for the tapped marker that pushes the detail.
-struct NearbyMap: View {
-    let spots: [Spot]
-    let center: Coordinate
-    @State private var selected: Spot?
-
-    var body: some View {
-        SpotMapView(spots: spots, center: center) { spot in
-            selected = spot
-        }
-        .overlay(alignment: .bottom) {
-            if let selected, spots.contains(selected) {
-                NavigationLink(value: selected) {
-                    SpotCard(spot: selected)
-                        .background(Color.hz.bgPrimary, in: RoundedRectangle(cornerRadius: HZRadius.lg))
-                        .hzElevation(.level1)
-                }
-                .buttonStyle(.plain)
-                .padding(HZSpace.s4)
-                .padding(.bottom, 56)
-            }
-        }
-    }
-}
-
 /// 플로팅 알약 (DESIGN §6.10): 높이 44, 잉크 배경, 흰 caption Bold + 아이콘 16.
+/// `light` 변형은 흰 배경·잉크 글자("이 지역에서 다시 찾기"), `spinning`이면 아이콘이 돈다(동작 줄이기 시 정지).
 struct FloatingPill: View {
     let title: String
     let symbol: String
+    var light = false
+    var spinning = false
     let action: () -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         Button(action: action) {
             HStack(spacing: 6) {
-                Image(systemName: symbol).font(.system(size: 14, weight: .semibold))
+                Image(systemName: symbol)
+                    .font(.system(size: 14, weight: .semibold))
+                    .rotationEffect(.degrees(spinning && !reduceMotion ? 360 : 0))
+                    .animation(
+                        spinning && !reduceMotion ? .linear(duration: 1).repeatForever(autoreverses: false) : .default,
+                        value: spinning)
                 Text(title).font(HZTextStyle.caption.font(weight: .bold))
             }
-            .foregroundStyle(Color.hz.textInverse)
+            .foregroundStyle(light ? Color.hz.textPrimary : Color.hz.textInverse)
             .padding(.horizontal, HZSpace.s4)
             .frame(height: 44)
-            .background(Color.hz.bgInverse, in: Capsule())
+            .background(light ? Color.hz.bgPrimary : Color.hz.bgInverse, in: Capsule())
             .hzElevation(.level1)
         }
         .buttonStyle(.plain)
@@ -308,7 +252,7 @@ struct FloatingPill: View {
 
 /// S1b 칩 줄 (DESIGN §6.2): `무료만 │ 전체 · 카테고리…`. 홈 카테고리 줄과 같은 `HZPill`을 쓴다.
 struct CategoryChips: View {
-    let viewModel: NearbyViewModel
+    let viewModel: any SpotFilterControlling
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
