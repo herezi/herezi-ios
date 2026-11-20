@@ -21,7 +21,7 @@ planner(이슈 + 수용 기준) → designer(화면 스펙, 앱 기능일 때) �
    → reviewer(PR 리뷰) → qa(수용 기준 검증) → 머지 → 이슈 닫힘
 ```
 
-- 모든 작업은 이슈 → 브랜치 → PR(`Closes #n`). main 직접 푸시 금지.
+- 모든 작업은 이슈 → 브랜치 → PR(`Closes #n`). PR은 `develop`으로, `main`은 출시 전용. 직접 푸시 금지.
 - 승인되지 않은 기획을 근거로 코드를 쓰지 않는다 (`herezi-api/docs/product/`).
-- 기준 문서: [SERVICE-PLAN](https://github.com/herezi/herezi-api/blob/main/docs/product/SERVICE-PLAN.md) · [PRODUCT](https://github.com/herezi/herezi-api/blob/main/docs/product/PRODUCT.md) · [TECH-PLAN](https://github.com/herezi/herezi-api/blob/main/docs/product/TECH-PLAN.md) · [DATA-PLAN](https://github.com/herezi/herezi-api/blob/main/docs/product/DATA-PLAN.md) · [openapi.yaml](https://github.com/herezi/herezi-api/blob/main/api/openapi.yaml)
+- 기준 문서: [SERVICE-PLAN](https://github.com/herezi/herezi-api/blob/develop/docs/product/SERVICE-PLAN.md) · [PRODUCT](https://github.com/herezi/herezi-api/blob/develop/docs/product/PRODUCT.md) · [TECH-PLAN](https://github.com/herezi/herezi-api/blob/develop/docs/product/TECH-PLAN.md) · [DATA-PLAN](https://github.com/herezi/herezi-api/blob/develop/docs/product/DATA-PLAN.md) · [openapi.yaml](https://github.com/herezi/herezi-api/blob/develop/api/openapi.yaml)
 - 공통 역할 파일을 고치면 세 레포에 같이 반영한다.

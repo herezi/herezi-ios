@@ -11,10 +11,10 @@ Swift 6 · SwiftUI · iOS 17+ · XcodeGen · 네이버 지도 SDK(SPM).
 
 제품·기술 결정의 기준은 [herezi-api](https://github.com/herezi/herezi-api)에 있다. 여기서 고치지 않는다.
 
-- [SERVICE-PLAN.md](https://github.com/herezi/herezi-api/blob/main/docs/product/SERVICE-PLAN.md) — 서비스 기획 (무엇을, 왜)
-- [PRODUCT.md](https://github.com/herezi/herezi-api/blob/main/docs/product/PRODUCT.md) — 제품 스펙
-- [TECH-PLAN.md](https://github.com/herezi/herezi-api/blob/main/docs/product/TECH-PLAN.md) — 기술 기획 (스택, 일정, 개발 방식)
-- [api/openapi.yaml](https://github.com/herezi/herezi-api/blob/main/api/openapi.yaml) — API 계약 (단일 기준)
+- [SERVICE-PLAN.md](https://github.com/herezi/herezi-api/blob/develop/docs/product/SERVICE-PLAN.md) — 서비스 기획 (무엇을, 왜)
+- [PRODUCT.md](https://github.com/herezi/herezi-api/blob/develop/docs/product/PRODUCT.md) — 제품 스펙
+- [TECH-PLAN.md](https://github.com/herezi/herezi-api/blob/develop/docs/product/TECH-PLAN.md) — 기술 기획 (스택, 일정, 개발 방식)
+- [api/openapi.yaml](https://github.com/herezi/herezi-api/blob/develop/api/openapi.yaml) — API 계약 (단일 기준)
 
 이 레포의 결정 기록: [docs/adr/](docs/adr/).
 
@@ -63,7 +63,7 @@ Pretendard 글꼴은 `Resources/Fonts/`(SIL OFL 1.1, `OFL.txt` 동봉) — 앱 �
 1. **기획 먼저, 코드는 나중.** 새 기능·구조 변경은 `docs/exec-plans/active/`에 계획을 쓰고 승인받은 뒤 시작한다.
    기술 선택을 바꾸려면 herezi-api `TECH-PLAN.md` 또는 이 레포 ADR을 먼저 고친다.
 2. **이슈 → 브랜치 → PR.** 모든 작업은 GitHub 이슈에서 시작해 브랜치(`feat/…`, `fix/…`, `chore/…`)에서 하고,
-   PR 본문에 `Closes #n`을 쓴다. **main에 직접 푸시하지 않는다.** `make check`와 CI가 통과해야 머지한다.
+   PR 본문에 `Closes #n`을 쓴다. **`develop`(기본 브랜치)으로 PR을 보낸다.** `main`은 출시 전용(`develop` → `main` 릴리스 PR). **main·develop에 직접 푸시하지 않는다.** `make check`와 CI가 통과해야 머지한다.
 3. **계약은 herezi-api가 기준.** `api/openapi.yaml`을 여기서 고치지 않는다. 바꿀 일이 있으면 herezi-api에 이슈/PR을 먼저 내고,
    머지 후 `make sync-api` → 코드 수정. `scripts/check-api-drift.sh`가 `Category` enum, `Spot`/`SpotPage`/`SpotMap` 필드, `/v1` 경로 구현 여부를 대조한다.
    - 예: v1.0에서 `free` 카테고리는 없어졌다. 무료는 `Spot.isFree` + 쿼리 `free=true`(`SpotQuery.freeOnly`)다.
