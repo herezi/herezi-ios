@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Herezi API
-  version: 0.1.0
+  version: 0.3.0
   description: |
     Herezi 공개 API 계약. 이 파일이 서버·iOS·Android 사이의 단일 기준이다.
     변경 시 하위호환을 지키고, 앱 레포는 `make sync-api`로 이 파일을 가져간다.
@@ -59,6 +59,43 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
+  /v1/spots/map:
+    get:
+      operationId: listSpotsInBBox
+      summary: 지도 영역(bbox) 안의 항목. 클러스터링은 앱에서 한다
+      description: |
+        남서(sw)·북동(ne) 꼭짓점으로 지정한 영역 안의 항목을 영역 중심에서 가까운 순으로 최대 `limit`개 돌려준다.
+        더 있으면 `truncated`가 true다(지도를 확대하면 더 보인다). 날짜변경선을 넘는 영역(sw_lng > ne_lng)은 지원하지 않는다.
+      parameters:
+        - { name: sw_lat, in: query, required: true, schema: { type: number, format: double, minimum: -90, maximum: 90 } }
+        - { name: sw_lng, in: query, required: true, schema: { type: number, format: double, minimum: -180, maximum: 180 } }
+        - { name: ne_lat, in: query, required: true, schema: { type: number, format: double, minimum: -90, maximum: 90 } }
+        - { name: ne_lng, in: query, required: true, schema: { type: number, format: double, minimum: -180, maximum: 180 } }
+        - name: category
+          in: query
+          description: 쉼표로 구분한 카테고리 목록
+          schema: { type: string, example: "festival,popup" }
+        - name: when
+          in: query
+          schema: { type: string, enum: [now, today, weekend, week], default: now }
+        - name: free
+          in: query
+          description: true면 무료 항목만
+          schema: { type: boolean, default: false }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 500, default: 200 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SpotMap" }
+        "400":
+          description: 잘못된 파라미터 (sw가 ne보다 북쪽·동쪽인 경우 포함)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
   /v1/spots/{id}:
     get:
       operationId: getSpot
@@ -71,7 +108,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Spot" }
         "404":
-          description: 없음
+          description: 없음 (끝난 항목은 404가 아니라 200 + is_ended=true)
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -82,7 +119,7 @@ components:
       enum: [nature, festival, performance, exhibition, popup, food, family, pet, sports]
     Spot:
       type: object
-      required: [id, title, category, lat, lng, starts_at, source]
+      required: [id, title, category, lat, lng, starts_at, source, fetched_at, is_ended]
       properties:
         id: { type: string }
         title: { type: string }
@@ -98,7 +135,13 @@ components:
         image_url: { type: string, format: uri }
         source: { type: string, description: "tourapi | kopis | seoul_culture | ..." }
         source_url: { type: string, format: uri }
-        distance_m: { type: integer, description: 요청 위치로부터의 거리 }
+        fetched_at: { type: string, format: date-time, description: 원본 소스에서 마지막으로 가져온 시각(앱의 "갱신 시각") }
+        distance_m: { type: integer, description: "요청 위치로부터의 거리 (/v1/spots에서만)" }
+        is_ended:
+          type: boolean
+          description: |
+            응답 시각 기준으로 끝났는지(ends_at < now). 목록·지도는 끝난 항목을 반환하지 않으므로 항상 false.
+            상세(/v1/spots/{id})는 끝난 항목도 200으로 반환하고 true로 표시한다 — 앱은 '종료됨'으로 보여준다(찜 목록에서 흐리게).
     SpotPage:
       type: object
       required: [items]
@@ -107,6 +150,14 @@ components:
           type: array
           items: { $ref: "#/components/schemas/Spot" }
         next_cursor: { type: string }
+    SpotMap:
+      type: object
+      required: [items, truncated]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Spot" }
+        truncated: { type: boolean, description: 영역 안에 limit보다 많은 항목이 있으면 true }
     Error:
       type: object
       required: [code, message]

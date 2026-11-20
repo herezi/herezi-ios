@@ -1,0 +1,13 @@
+{
+  "id": "seoul_culture-123",
+  "title": "가을 국화 전시회",
+  "category": "nature",
+  "lat": 37.5663,
+  "lng": 126.9779,
+  "place_name": "서울광장",
+  "starts_at": "2026-10-01T10:00:00+09:00",
+  "ends_at": "2026-11-10T18:00:00+09:00",
+  "source": "seoul_culture",
+  "fetched_at": "2026-11-20T03:00:00Z",
+  "is_ended": true
+}

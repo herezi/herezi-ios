@@ -1,7 +1,7 @@
 import Domain
 import Foundation
 
-/// `SpotsService` backed by the real Herezi API (`GET /v1/spots`, `GET /v1/spots/{id}`).
+/// `SpotsService` backed by the real Herezi API (`GET /v1/spots`, `GET /v1/spots/map`, `GET /v1/spots/{id}`).
 public struct LiveSpotsService: SpotsService {
     private let client: APIClient
 
@@ -11,6 +11,10 @@ public struct LiveSpotsService: SpotsService {
 
     public func spots(_ query: SpotQuery) async throws -> SpotPage {
         try await client.get(SpotPageDTO.self, path: "/v1/spots", query: Self.queryItems(for: query)).toDomain()
+    }
+
+    public func spotsInBounds(_ query: SpotMapQuery) async throws -> SpotMap {
+        try await client.get(SpotMapDTO.self, path: "/v1/spots/map", query: Self.queryItems(for: query)).toDomain()
     }
 
     public func spot(id: String) async throws -> Spot {
@@ -39,6 +43,25 @@ public struct LiveSpotsService: SpotsService {
         }
         if let cursor = query.cursor {
             items.append(URLQueryItem(name: "cursor", value: cursor))
+        }
+        return items
+    }
+
+    static func queryItems(for query: SpotMapQuery) -> [URLQueryItem] {
+        var items = [
+            URLQueryItem(name: "sw_lat", value: String(query.bounds.southWest.latitude)),
+            URLQueryItem(name: "sw_lng", value: String(query.bounds.southWest.longitude)),
+            URLQueryItem(name: "ne_lat", value: String(query.bounds.northEast.latitude)),
+            URLQueryItem(name: "ne_lng", value: String(query.bounds.northEast.longitude)),
+            URLQueryItem(name: "when", value: query.when.rawValue),
+            URLQueryItem(name: "limit", value: String(query.limit)),
+        ]
+        if !query.categories.isEmpty {
+            let joined = query.categories.map(\.rawValue).sorted().joined(separator: ",")
+            items.append(URLQueryItem(name: "category", value: joined))
+        }
+        if query.freeOnly {
+            items.append(URLQueryItem(name: "free", value: "true"))
         }
         return items
     }

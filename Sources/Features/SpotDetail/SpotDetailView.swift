@@ -25,9 +25,12 @@ public struct SpotDetailView: View {
                         Label("원문 보기", systemImage: "safari")
                     }
                 }
-                Text("출처: \(spot.source)")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("출처: \(spot.source)")
+                    Text("갱신 \(SpotFormatting.relativeTime(spot.fetchedAt, now: Date()))")
+                }
+                .font(.footnote)
+                .foregroundStyle(.secondary)
             }
             .padding()
         }
@@ -42,14 +45,24 @@ public struct SpotDetailView: View {
                 .foregroundStyle(.tint)
             Text(spot.title)
                 .font(.title2.bold())
-            if spot.isFree == true {
-                Text("무료")
-                    .font(.caption.bold())
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background(.green.opacity(0.15), in: Capsule())
+            // TODO(design): 배지 스타일은 디자인 스펙이 나오면 다듬는다.
+            HStack(spacing: 6) {
+                if spot.isEnded {
+                    badge("종료됨", tint: .gray)
+                }
+                if spot.isFree == true {
+                    badge("무료", tint: .green)
+                }
             }
         }
+    }
+
+    private func badge(_ text: String, tint: Color) -> some View {
+        Text(text)
+            .font(.caption.bold())
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(tint.opacity(0.15), in: Capsule())
     }
 
     private var infoRows: some View {
@@ -78,5 +91,11 @@ public struct SpotDetailView: View {
 #Preview {
     NavigationStack {
         SpotDetailView(spot: SampleSpots.all[0])
+    }
+}
+
+#Preview("종료됨") {
+    NavigationStack {
+        SpotDetailView(spot: SampleSpots.all.first { $0.id == SampleSpots.endedID } ?? SampleSpots.all[0])
     }
 }
