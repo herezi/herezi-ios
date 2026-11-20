@@ -63,7 +63,7 @@ public struct SpotCard: View {
     }
 
     private var thumbnail: some View {
-        SpotImage(spot: spot, iconSize: 28)
+        SpotImage(spot: spot, fallback: .icon(size: 28))
             .frame(width: HZSize.thumb, height: HZSize.thumb)
             .clipShape(RoundedRectangle(cornerRadius: HZRadius.md))
     }
@@ -111,14 +111,22 @@ public struct SpotCard: View {
     }
 }
 
-/// 대표 이미지. `imageURL`이 없거나 실패하면 카테고리 색 배경 + 아이콘.
+/// 대표 이미지 (DESIGN §6.17). 불러오는 중에는 `bg.secondary`, 없거나 실패하면 대체.
+/// 폭 120 미만(카드 썸네일)은 카테고리 아이콘, 그 이상(히어로·가로 카드·상세)은 타이포 포스터.
 public struct SpotImage: View {
-    let spot: Spot
-    let iconSize: CGFloat
+    public enum Fallback: Sendable {
+        /// 카테고리 색 12% + 아이콘.
+        case icon(size: CGFloat)
+        /// 타이포 포스터 (`SpotImagePlaceholder`).
+        case poster(SpotImagePlaceholder.Options)
+    }
 
-    public init(spot: Spot, iconSize: CGFloat) {
+    let spot: Spot
+    let fallback: Fallback
+
+    public init(spot: Spot, fallback: Fallback) {
         self.spot = spot
-        self.iconSize = iconSize
+        self.fallback = fallback
     }
 
     public var body: some View {
@@ -128,14 +136,21 @@ public struct SpotImage: View {
                 case .success(let image):
                     image.resizable().scaledToFill()
                 case .failure:
-                    CategoryPlaceholder(spot.category, iconSize: iconSize)
+                    placeholder
                 default:
                     Color.hz.bgSecondary
                 }
             }
             .accessibilityLabel("\(spot.title) 사진")
         } else {
-            CategoryPlaceholder(spot.category, iconSize: iconSize)
+            placeholder
+        }
+    }
+
+    @ViewBuilder private var placeholder: some View {
+        switch fallback {
+        case .icon(let size): CategoryPlaceholder(spot.category, iconSize: size)
+        case .poster(let options): SpotImagePlaceholder(spot: spot, options: options)
         }
     }
 }

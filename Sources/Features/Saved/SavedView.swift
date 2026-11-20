@@ -7,13 +7,16 @@ import SwiftUI
 public struct SavedView: View {
     @State private var viewModel: SavedViewModel
     let onBrowse: () -> Void
+    let onSettings: (() -> Void)?
 
     @State private var toast: HZToast?
     @State private var confirmingClear = false
 
-    public init(viewModel: SavedViewModel, onBrowse: @escaping () -> Void = {}) {
+    /// - Parameter onSettings: 상단 바 오른쪽 톱니 → 설정(S6).
+    public init(viewModel: SavedViewModel, onBrowse: @escaping () -> Void = {}, onSettings: (() -> Void)? = nil) {
         _viewModel = State(initialValue: viewModel)
         self.onBrowse = onBrowse
+        self.onSettings = onSettings
     }
 
     public var body: some View {
@@ -22,6 +25,13 @@ public struct SavedView: View {
             .navigationTitle("저장")
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
+                if let onSettings, !viewModel.isEditing {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button(action: onSettings) { Image(systemName: "gearshape") }
+                            .foregroundStyle(Color.hz.iconPrimary)
+                            .accessibilityLabel("설정")
+                    }
+                }
                 if !viewModel.isEmpty {
                     ToolbarItem(placement: .topBarTrailing) {
                         Button(viewModel.isEditing ? "완료" : "편집") {
@@ -41,7 +51,7 @@ public struct SavedView: View {
                         .background(Color.hz.bgPrimary)
                 }
             }
-            .task { await viewModel.refresh() }
+            .onAppear { Task { await viewModel.refresh() } }
             .hzToast($toast) { viewModel.undo() }
             .onChange(of: viewModel.toastMessage) { _, message in
                 guard let message else { return }

@@ -57,8 +57,9 @@ struct CardPeriodTests {
 }
 
 /// 서울 시각으로 날짜를 만든다.
-func kst(_ year: Int, _ month: Int, _ day: Int, _ hour: Int = 0, _ minute: Int = 0) -> Date {
+func kst(_ year: Int, _ month: Int, _ day: Int, _ hour: Int = 0, _ minute: Int = 0, _ second: Int = 0) -> Date {
     var calendar = Calendar(identifier: .gregorian)
     calendar.timeZone = TimeZone(identifier: "Asia/Seoul")!
-    return calendar.date(from: DateComponents(year: year, month: month, day: day, hour: hour, minute: minute))!
+    return calendar.date(
+        from: DateComponents(year: year, month: month, day: day, hour: hour, minute: minute, second: second))!
 }
