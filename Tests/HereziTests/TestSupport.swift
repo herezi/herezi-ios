@@ -41,6 +41,10 @@ actor RecordingSpotsService: SpotsService {
     func spot(id: String) async throws -> Spot {
         try await base.spot(id: id)
     }
+
+    func reverseGeocode(_ coordinate: Coordinate) async throws -> String {
+        try await base.reverseGeocode(coordinate)
+    }
 }
 
 /// 위치 권한 거부를 흉내 내는 `LocationProviding`.
@@ -108,6 +112,7 @@ struct ScriptedDetailService: SpotsService {
         case .failure, nil: throw Offline()
         }
     }
+    func reverseGeocode(_ coordinate: Coordinate) async throws -> String { throw Offline() }
 }
 
 /// 정해진 위치명을 돌려주는 `PlaceNaming`.
@@ -137,6 +142,10 @@ actor ToggleFailingService: SpotsService {
 
     func spotsInBounds(_ query: SpotMapQuery) async throws -> SpotMap { try await base.spotsInBounds(query) }
     func spot(id: String) async throws -> Spot { try await base.spot(id: id) }
+    func reverseGeocode(_ coordinate: Coordinate) async throws -> String {
+        if failing { throw Offline() }
+        return try await base.reverseGeocode(coordinate)
+    }
 }
 
 /// 커서마다 정해진 페이지를 돌려주는 서비스.
@@ -155,4 +164,5 @@ actor PagedService: SpotsService {
 
     func spotsInBounds(_ query: SpotMapQuery) async throws -> SpotMap { SpotMap(items: [], truncated: false) }
     func spot(id: String) async throws -> Spot { throw SpotsServiceError.notFound }
+    func reverseGeocode(_ coordinate: Coordinate) async throws -> String { "" }
 }

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Herezi API
-  version: 0.4.0
+  version: 0.5.0
   description: |
     Herezi 공개 API 계약. 이 파일이 서버·iOS·Android 사이의 단일 기준이다.
     변경 시 하위호환을 지키고, 앱 레포는 `make sync-api`로 이 파일을 가져간다.
@@ -123,6 +123,38 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
+  /v1/geo/reverse:
+    get:
+      operationId: reverseGeocode
+      summary: 좌표 → 행정구역 이름 (앱 상단 위치명, 예 "중구 태평로1가")
+      description: |
+        네이버 Reverse Geocoding을 서버가 대신 부른다(Client Secret은 서버에만 있다).
+        좌표는 소수 3자리(약 100m)로 반올림해 1일 동안 캐시한다. 서울 밖도 그대로 돌려준다.
+        결과가 없는 좌표(바다 등)는 200 + 빈 문자열. 501·502이면 앱은 OS 지오코더 결과를 쓴다.
+      parameters:
+        - { name: lat, in: query, required: true, schema: { type: number, format: double, minimum: -90, maximum: 90 } }
+        - { name: lng, in: query, required: true, schema: { type: number, format: double, minimum: -180, maximum: 180 } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GeoReverse" }
+        "400":
+          description: 잘못된 파라미터
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "501":
+          description: 서버에 네이버 키가 설정되지 않음 (code=not_configured)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "502":
+          description: 네이버 호출 실패·타임아웃(2초) (code=upstream_error)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
 components:
   schemas:
     Category:
@@ -169,6 +201,17 @@ components:
           type: array
           items: { $ref: "#/components/schemas/Spot" }
         truncated: { type: boolean, description: 영역 안에 limit보다 많은 항목이 있으면 true }
+    GeoReverse:
+      type: object
+      required: [area1, area2, area3, label]
+      properties:
+        area1: { type: string, description: "시·도 (예: 서울특별시)", example: 서울특별시 }
+        area2: { type: string, description: "시·군·구 (예: 중구)", example: 중구 }
+        area3: { type: string, description: "읍·면·동 (예: 태평로1가)", example: 태평로1가 }
+        label:
+          type: string
+          description: 앱에 보여줄 위치명. area2 + " " + area3(빈 값은 생략), 둘 다 없으면 area1, 결과가 없으면 빈 문자열
+          example: 중구 태평로1가
     Error:
       type: object
       required: [code, message]

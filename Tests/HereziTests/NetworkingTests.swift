@@ -38,6 +38,12 @@ struct SpotDecodingTests {
         #expect(map.items.first?.distanceMeters == nil)  // distance_m은 /v1/spots에서만 온다
     }
 
+    @Test func 역지오코딩_응답의_label을_읽는다() throws {
+        let dto = try JSONDecoder.herezi.decode(GeoReverseDTO.self, from: Fixture.data("geo_reverse"))
+        #expect(dto.label == "중구 태평로1가")
+        #expect(dto.area2 == "중구" && dto.area3 == "태평로1가")
+    }
+
     @Test func 끝난_항목의_상세를_읽는다() throws {
         let spot = try #require(
             try JSONDecoder.herezi.decode(SpotDTO.self, from: Fixture.data("spot_ended")).toDomain())
