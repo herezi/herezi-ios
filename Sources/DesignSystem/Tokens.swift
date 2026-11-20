@@ -127,10 +127,50 @@ public enum HZTextStyle: CaseIterable, Sendable {
         UIFontMetrics(forTextStyle: uiTextStyle).scaledValue(for: size)
     }
 
-    /// Pretendard는 아직 번들하지 않았다(DESIGN §3) — 시스템 글꼴로 크기·굵기만 맞춘다.
-    /// 화면이 다시 그려질 때 다이나믹 타입 크기를 다시 읽는다. 바로 반영돼야 하는 곳은 `.hzText(_:)`를 쓴다.
-    public var font: Font {
-        .system(size: scaledSize, weight: weight)
+    /// Pretendard(앱 번들, `Resources/Fonts`), 다이나믹 타입은 `relativeTo` 기준으로 커진다.
+    public var font: Font { font(weight: weight) }
+
+    /// 굵기만 바꾼 같은 스타일. 예: 칩 선택 `HZTextStyle.caption.font(weight: .semibold)`.
+    /// Pretendard는 굵기별 파일이라 `Font.weight(_:)`/`.bold()` 대신 이것을 쓴다.
+    public func font(weight: Font.Weight) -> Font {
+        HZFontFamily.font(size: size, weight: weight, relativeTo: relativeTo)
+    }
+}
+
+/// Pretendard (SIL OFL 1.1, v1.3.9). Regular·Medium·SemiBold·Bold 4개만 번들한다 — 라이선스는 `Resources/Fonts/OFL.txt`.
+/// 앱 Info.plist `UIAppFonts`로 등록한다(project.yml). 등록이 안 된 곳(호스트 없는 단위 테스트)은 시스템 글꼴로 대체된다.
+public enum HZFontFamily {
+    /// 굵기 → PostScript 이름. 번들에 없는 굵기는 가장 가까운 것으로.
+    public static func name(for weight: Font.Weight) -> String {
+        switch weight {
+        case .ultraLight, .thin, .light, .regular: "Pretendard-Regular"
+        case .medium: "Pretendard-Medium"
+        case .semibold: "Pretendard-SemiBold"
+        default: "Pretendard-Bold"
+        }
+    }
+
+    /// 다이나믹 타입을 따르는 글꼴.
+    public static func font(size: CGFloat, weight: Font.Weight, relativeTo style: Font.TextStyle) -> Font {
+        .custom(name(for: weight), size: size, relativeTo: style)
+    }
+
+    /// 크기 고정 글꼴(이미 다이나믹 타입으로 키운 크기, 포스터처럼 그림 취급하는 글자).
+    public static func font(fixedSize size: CGFloat, weight: Font.Weight) -> Font {
+        .custom(name(for: weight), fixedSize: size)
+    }
+
+    /// UIKit용 (지도 마커 등 이미지로 그리는 글자). 등록이 안 됐으면 시스템 글꼴.
+    public static func uiFont(size: CGFloat, weight: Font.Weight) -> UIFont {
+        if let font = UIFont(name: name(for: weight), size: size) { return font }
+        let uiWeight: UIFont.Weight =
+            switch weight {
+            case .medium: .medium
+            case .semibold: .semibold
+            case .bold, .heavy, .black: .bold
+            default: .regular
+            }
+        return .systemFont(ofSize: size, weight: uiWeight)
     }
 }
 
@@ -168,7 +208,7 @@ private struct HZTextModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .font(.system(size: size, weight: style.weight))
+            .font(HZFontFamily.font(fixedSize: size, weight: style.weight))
             .lineSpacing(max(0, (style.lineHeight - style.size * 1.2) * size / style.size))
     }
 }

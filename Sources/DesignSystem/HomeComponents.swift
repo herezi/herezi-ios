@@ -30,7 +30,7 @@ public struct HZPill: View {
                 Circle().fill(dot).frame(width: 8, height: 8)
             }
             Text(title)
-                .font(selected ? Font.hz.caption.weight(.semibold) : Font.hz.caption)
+                .font(selected ? HZTextStyle.caption.font(weight: .semibold) : Font.hz.caption)
                 .lineLimit(1)
         }
         .foregroundStyle(selected ? Color.hz.textInverse : Color.hz.textPrimary)
@@ -122,7 +122,7 @@ public struct HeroCard: View {
         .overlay(alignment: .topLeading) {
             if let badge {
                 Text(badge)
-                    .font(Font.hz.caption.bold())
+                    .font(HZTextStyle.caption.font(weight: .bold))
                     .foregroundStyle(Color.hz.textPrimary)
                     .padding(.horizontal, 10)
                     .frame(height: 26)
@@ -275,7 +275,7 @@ public struct LocationBanner: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .fixedSize(horizontal: false, vertical: true)
             Button(actionTitle, action: action)
-                .font(Font.hz.caption.bold())
+                .font(HZTextStyle.caption.font(weight: .bold))
                 .foregroundStyle(Color.hz.textPrimary)
                 .frame(minHeight: HZSize.touch)
         }

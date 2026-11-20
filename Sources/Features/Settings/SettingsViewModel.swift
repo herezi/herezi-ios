@@ -21,6 +21,25 @@ public final class SettingsViewModel {
         DataSource(name: "산림청·기상청", url: URL(string: "https://www.data.go.kr")!),
     ]
 
+    /// 이용약관·개인정보 처리방침 (임시 GitHub Pages — 도메인 구매 후 교체, herezi-ios#16).
+    public static let termsURL = URL(string: "https://herezi.github.io/terms/")!
+    public static let privacyURL = URL(string: "https://herezi.github.io/privacy/")!
+
+    /// 오픈소스 라이선스 한 줄. `licenseFile`은 앱 번들 리소스 폴더 기준 경로.
+    public struct OpenSourceLicense: Identifiable, Hashable, Sendable {
+        public let name: String
+        public let license: String
+        public let url: URL
+        public let licenseFile: String
+        public var id: String { name }
+    }
+
+    public static let openSourceLicenses: [OpenSourceLicense] = [
+        OpenSourceLicense(
+            name: "Pretendard", license: "SIL Open Font License 1.1",
+            url: URL(string: "https://github.com/orioncactus/pretendard")!, licenseFile: "Fonts/OFL.txt")
+    ]
+
     public static let aiNotice = "요약은 AI(OpenAI GPT)가 원문을 정리한 것이에요. 정확한 내용은 원문을 확인해 주세요."
     public let supportEmail = SpotLinks.supportEmail
 

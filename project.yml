@@ -136,7 +136,13 @@ targets:
   Herezi:
     type: application
     platform: iOS
-    sources: [Sources/App]
+    sources:
+      - Sources/App
+      # Pretendard v1.3.9 (github.com/orioncactus/pretendard 릴리스 Pretendard-1.3.9.zip의 public/static),
+      # SIL OFL 1.1 — 라이선스 OFL.txt를 같이 번들하고 설정 > 오픈소스 라이선스에서 보여준다.
+      - path: Resources/Fonts
+        type: folder
+        buildPhase: resources
     dependencies:
       - target: Domain
       - target: Networking
@@ -165,6 +171,12 @@ targets:
         HereziUseFakeAPI: $(HEREZI_USE_FAKE_API)
         # Naver Cloud Platform Maps client ID (from Config/Secrets.xcconfig; empty is OK for build/test).
         NMFNcpKeyId: $(NAVER_MAPS_CLIENT_ID)
+        # 폴더 참조(Fonts/)로 번들되므로 경로에 폴더 이름을 붙인다.
+        UIAppFonts:
+          - Fonts/Pretendard-Regular.otf
+          - Fonts/Pretendard-Medium.otf
+          - Fonts/Pretendard-SemiBold.otf
+          - Fonts/Pretendard-Bold.otf
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
     settings:
