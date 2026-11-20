@@ -1,3 +1,4 @@
+import DesignSystem
 import Domain
 import FeatureNearby
 import FeatureSpotDetail
@@ -18,6 +19,9 @@ struct HereziApp: App {
                         SpotDetailView(spot: spot)
                     }
             }
+            .tint(Color.hz.ink)
+            // M1은 라이트 모드만 (DESIGN §2.2).
+            .preferredColorScheme(.light)
         }
     }
 }

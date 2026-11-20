@@ -14,8 +14,10 @@ public struct FakeSpotsService: SpotsService {
 
     public func spots(_ query: SpotQuery) async throws -> SpotPage {
         if let failure { throw failure }
+        let keyword = query.normalizedKeyword
         let filtered = allSpots.filter {
             Self.matches($0, categories: query.categories, freeOnly: query.freeOnly)
+                && Self.matches($0, keyword: keyword)
         }
         return SpotPage(items: Array(filtered.prefix(query.limit)))
     }
@@ -42,6 +44,13 @@ public struct FakeSpotsService: SpotsService {
     private static func matches(_ spot: Spot, categories: Set<SpotCategory>, freeOnly: Bool) -> Bool {
         !spot.isEnded && (categories.isEmpty || categories.contains(spot.category))
             && (!freeOnly || spot.isFree == true)
+    }
+
+    /// 서버처럼 제목·장소명·주소 중 하나에 대소문자 무시 부분 일치.
+    private static func matches(_ spot: Spot, keyword: String?) -> Bool {
+        guard let keyword else { return true }
+        return [spot.title, spot.placeName, spot.address].compactMap { $0 }
+            .contains { $0.localizedCaseInsensitiveContains(keyword) }
     }
 
     /// 정렬용 근사 거리(위경도 차의 제곱합). 서울 범위의 작은 영역에서는 순서만 맞으면 된다.

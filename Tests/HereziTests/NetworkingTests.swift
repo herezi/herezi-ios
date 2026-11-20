@@ -70,14 +70,22 @@ struct LiveSpotsServiceQueryTests {
 
     @Test func 기본_쿼리는_필수_파라미터만_보낸다() {
         let items = dictionary(SpotQuery(coordinate: .seoulCityHall))
-        #expect(items["lat"] == "37.5665")
-        #expect(items["lng"] == "126.978")
+        #expect(items["lat"] == "37.5663")
+        #expect(items["lng"] == "126.9779")
         #expect(items["radius_m"] == "3000")
         #expect(items["when"] == "now")
         #expect(items["limit"] == "30")
         #expect(items["category"] == nil)
         #expect(items["free"] == nil)
         #expect(items["cursor"] == nil)
+        #expect(items["q"] == nil)
+    }
+
+    @Test func 검색어는_앞뒤_공백을_자르고_q로_보낸다() {
+        #expect(dictionary(SpotQuery(coordinate: .seoulCityHall, keyword: "  빛초롱 "))["q"] == "빛초롱")
+        #expect(dictionary(SpotQuery(coordinate: .seoulCityHall, keyword: "   "))["q"] == nil)
+        let long = String(repeating: "가", count: 60)
+        #expect(dictionary(SpotQuery(coordinate: .seoulCityHall, keyword: long))["q"]?.count == 50)
     }
 
     @Test func 카테고리와_무료와_커서를_담는다() {

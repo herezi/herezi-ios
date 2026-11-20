@@ -115,6 +115,6 @@ public struct Coordinate: Hashable, Sendable {
         self.longitude = longitude
     }
 
-    /// Fallback when location permission is denied (M1 is Seoul-only).
-    public static let seoulCityHall = Coordinate(latitude: 37.5665, longitude: 126.9780)
+    /// 위치 권한이 없을 때의 기준점 서울시청 (계약 `GET /v1/spots` 설명, S0 스펙과 같은 값).
+    public static let seoulCityHall = Coordinate(latitude: 37.5663, longitude: 126.9779)
 }

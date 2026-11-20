@@ -41,6 +41,9 @@ public struct LiveSpotsService: SpotsService {
         if query.freeOnly {
             items.append(URLQueryItem(name: "free", value: "true"))
         }
+        if let keyword = query.normalizedKeyword {
+            items.append(URLQueryItem(name: "q", value: keyword))
+        }
         if let cursor = query.cursor {
             items.append(URLQueryItem(name: "cursor", value: cursor))
         }
