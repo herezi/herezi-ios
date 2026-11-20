@@ -74,12 +74,20 @@ targets:
       - target: Domain
       - package: NMapsMap
 
+  # Layer 1: 디자인 토큰·공통 컴포넌트 (herezi-api docs/design/DESIGN.md). SwiftUI + Domain만.
+  DesignSystem:
+    templates: [Module]
+    sources: [Sources/DesignSystem]
+    dependencies:
+      - target: Domain
+
   # Layer 2: feature UI. Depends on Domain (ports) + MapUI, never on Networking.
   FeatureNearby:
     templates: [Module]
     sources: [Sources/Features/Nearby]
     dependencies:
       - target: Domain
+      - target: DesignSystem
       - target: MapUI
 
   FeatureSpotDetail:
@@ -87,6 +95,7 @@ targets:
     sources: [Sources/Features/SpotDetail]
     dependencies:
       - target: Domain
+      - target: DesignSystem
       - target: MapUI
 
   # Layer 3: composition root. Wires adapters into features.
@@ -97,6 +106,7 @@ targets:
     dependencies:
       - target: Domain
       - target: Networking
+      - target: DesignSystem
       - target: FeatureNearby
       - target: FeatureSpotDetail
       - target: MapUI
@@ -111,7 +121,7 @@ targets:
         CFBundleVersion: "1"
         UILaunchScreen: {}
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
-        NSLocationWhenInUseUsageDescription: 지금 내 주변에서 열리는 축제·공연·전시를 보여드리기 위해 현재 위치를 사용합니다.
+        NSLocationWhenInUseUsageDescription: 지금 내 주변의 축제·공연·전시를 보여드리기 위해 위치를 사용해요.
         HereziAPIBaseURL: $(HEREZI_API_BASE_URL)
         HereziUseFakeAPI: $(HEREZI_USE_FAKE_API)
         # Naver Cloud Platform Maps client ID (from Config/Secrets.xcconfig; empty is OK for build/test).
@@ -136,6 +146,7 @@ targets:
     dependencies:
       - target: Domain
       - target: Networking
+      - target: DesignSystem
       - target: FeatureNearby
       - target: MapUI
     settings:

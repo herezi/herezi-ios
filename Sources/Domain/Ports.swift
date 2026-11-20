@@ -9,8 +9,13 @@ public struct SpotQuery: Hashable, Sendable {
     public var when: WhenFilter
     /// `free=true` — 무료 항목만. false면 파라미터를 보내지 않는다.
     public var freeOnly: Bool
+    /// `q` — 키워드 검색(제목·장소명·주소 부분 일치). 앞뒤 공백을 자른 뒤 비어 있으면 보내지 않는다.
+    public var keyword: String?
     public var cursor: String?
     public var limit: Int
+
+    /// 계약상 `q`의 최대 글자 수.
+    public static let keywordMaxLength = 50
 
     public init(
         coordinate: Coordinate,
@@ -18,6 +23,7 @@ public struct SpotQuery: Hashable, Sendable {
         categories: Set<SpotCategory> = [],
         when: WhenFilter = .now,
         freeOnly: Bool = false,
+        keyword: String? = nil,
         cursor: String? = nil,
         limit: Int = 30
     ) {
@@ -26,8 +32,17 @@ public struct SpotQuery: Hashable, Sendable {
         self.categories = categories
         self.when = when
         self.freeOnly = freeOnly
+        self.keyword = keyword
         self.cursor = cursor
         self.limit = limit
+    }
+
+    /// 서버에 보낼 `q` 값. 앞뒤 공백을 자르고 50자로 자른다. 비면 nil.
+    public var normalizedKeyword: String? {
+        guard let trimmed = keyword?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else {
+            return nil
+        }
+        return String(trimmed.prefix(Self.keywordMaxLength))
     }
 }
 

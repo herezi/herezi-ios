@@ -15,6 +15,17 @@ struct FakeSpotsServiceTests {
         #expect(page.items.allSatisfy { !$0.isEnded })
     }
 
+    @Test func 검색어는_제목_장소명_주소에서_찾고_끝난_항목은_뺀다() async throws {
+        let byTitle = try await service.spots(SpotQuery(coordinate: .seoulCityHall, keyword: "빛초롱"))
+        #expect(byTitle.items.map(\.id) == ["sample-1"])
+        let byPlace = try await service.spots(SpotQuery(coordinate: .seoulCityHall, keyword: "광화문"))
+        #expect(byPlace.items.map(\.id) == ["sample-4"])
+        let byAddress = try await service.spots(SpotQuery(coordinate: .seoulCityHall, keyword: "청계천로"))
+        #expect(byAddress.items.map(\.id) == ["sample-1"])
+        let ended = try await service.spots(SpotQuery(coordinate: .seoulCityHall, keyword: "국화"))
+        #expect(ended.items.isEmpty)
+    }
+
     @Test func 끝난_항목은_상세로만_열린다() async throws {
         let spot = try await service.spot(id: SampleSpots.endedID)
         #expect(spot.isEnded)

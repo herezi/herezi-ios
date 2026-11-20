@@ -1,3 +1,4 @@
+import DesignSystem
 import Domain
 import MapUI
 import SwiftUI
@@ -45,29 +46,18 @@ public struct SpotDetailView: View {
                 .foregroundStyle(.tint)
             Text(spot.title)
                 .font(.title2.bold())
-            // TODO(design): 배지 스타일은 디자인 스펙이 나오면 다듬는다.
             HStack(spacing: 6) {
-                if spot.isEnded {
-                    badge("종료됨", tint: .gray)
-                }
-                if spot.isFree == true {
-                    badge("무료", tint: .green)
-                }
+                if spot.isEnded { HZBadge(.ended) }
+                if spot.isFree == true { HZBadge(.free) }
             }
         }
     }
 
-    private func badge(_ text: String, tint: Color) -> some View {
-        Text(text)
-            .font(.caption.bold())
-            .padding(.horizontal, 8)
-            .padding(.vertical, 3)
-            .background(tint.opacity(0.15), in: Capsule())
-    }
-
     private var infoRows: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Label(SpotFormatting.dateRange(start: spot.startsAt, end: spot.endsAt), systemImage: "calendar")
+            Label(
+                SpotFormatting.cardPeriod(start: spot.startsAt, end: spot.endsAt, now: Date()).text,
+                systemImage: "calendar")
             if let place = spot.placeName {
                 Label(place, systemImage: "mappin.and.ellipse")
             }
