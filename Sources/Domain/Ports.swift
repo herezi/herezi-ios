@@ -80,6 +80,9 @@ public protocol SpotsService: Sendable {
     func spotsInBounds(_ query: SpotMapQuery) async throws -> SpotMap
     /// 상세. 끝난 항목도 반환한다(`isEnded == true`).
     func spot(id: String) async throws -> Spot
+    /// `GET /v1/geo/reverse` — 좌표 → 위치명 label("중구 태평로1가"). 결과가 없으면 빈 문자열.
+    /// 서버에 네이버 키가 없거나(501) 네이버 호출이 실패하면(502) 던진다 — 앱은 OS 지오코더로 대체한다.
+    func reverseGeocode(_ coordinate: Coordinate) async throws -> String
 }
 
 /// 포트가 던지는 도메인 오류. 어댑터(HTTP 등)는 자기 오류를 이것으로 바꿔 Features가 구분할 수 있게 한다.
@@ -115,6 +118,27 @@ public protocol LocationPermissionProviding: AnyObject {
 @MainActor
 public protocol PlaceNaming {
     func placeName(for coordinate: Coordinate) async -> String?
+}
+
+/// `PlaceNaming` 조합: 서버 역지오코딩(네이버, 구·동까지 나옴)을 먼저 쓰고,
+/// 실패하거나 빈 label이면 `fallback`(App의 OS 지오코더)을 쓴다 (herezi-api#35).
+@MainActor
+public struct ServerPlaceNaming: PlaceNaming {
+    private let service: any SpotsService
+    private let fallback: any PlaceNaming
+
+    public init(service: any SpotsService, fallback: any PlaceNaming) {
+        self.service = service
+        self.fallback = fallback
+    }
+
+    public func placeName(for coordinate: Coordinate) async -> String? {
+        if let label = try? await service.reverseGeocode(coordinate) {
+            let trimmed = label.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty { return trimmed }
+        }
+        return await fallback.placeName(for: coordinate)
+    }
 }
 
 /// Port: the user's current location. Implemented in the App layer with CoreLocation.

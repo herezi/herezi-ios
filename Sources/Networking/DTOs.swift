@@ -86,6 +86,21 @@ struct SpotMapDTO: Decodable, Sendable {
     }
 }
 
+/// `components.schemas.GeoReverse` — 앱은 `label`만 쓴다.
+struct GeoReverseDTO: Decodable, Sendable {
+    let area1: String
+    let area2: String
+    let area3: String
+    let label: String
+
+    enum CodingKeys: String, CodingKey {
+        case area1 = "area1"
+        case area2 = "area2"
+        case area3 = "area3"
+        case label = "label"
+    }
+}
+
 /// `components.schemas.Error`
 struct ErrorDTO: Decodable, Sendable {
     let code: String

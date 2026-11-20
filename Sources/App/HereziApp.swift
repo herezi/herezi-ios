@@ -46,7 +46,7 @@ final class AppModel {
 
     let service = AppEnvironment.makeSpotsService()
     let location = CoreLocationProvider(timeout: .seconds(5))
-    let naming = GeocoderPlaceNaming()
+    let naming: any PlaceNaming
     let saved = SavedSpotsStore()
     let recents = RecentSearchesStore()
     let home: HomeViewModel
@@ -58,6 +58,8 @@ final class AppModel {
     var savedPath = NavigationPath()
 
     init() {
+        // 서버 역지오코딩(구·동) → 실패·빈 값이면 OS 지오코더.
+        naming = ServerPlaceNaming(service: service, fallback: GeocoderPlaceNaming())
         home = HomeViewModel(service: service, location: location, naming: naming, saved: saved)
         // 스크린리더가 켜져 있으면 시트를 펼친 채 시작한다(목록이 지도의 대안, S2 접근성).
         map = MapViewModel(

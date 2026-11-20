@@ -65,7 +65,7 @@ Pretendard 글꼴은 `Resources/Fonts/`(SIL OFL 1.1, `OFL.txt` 동봉) — 앱 �
 2. **이슈 → 브랜치 → PR.** 모든 작업은 GitHub 이슈에서 시작해 브랜치(`feat/…`, `fix/…`, `chore/…`)에서 하고,
    PR 본문에 `Closes #n`을 쓴다. **`develop`(기본 브랜치)으로 PR을 보낸다.** `main`은 출시 전용(`develop` → `main` 릴리스 PR). **main·develop에 직접 푸시하지 않는다.** `make check`와 CI가 통과해야 머지한다.
 3. **계약은 herezi-api가 기준.** `api/openapi.yaml`을 여기서 고치지 않는다. 바꿀 일이 있으면 herezi-api에 이슈/PR을 먼저 내고,
-   머지 후 `make sync-api` → 코드 수정. `scripts/check-api-drift.sh`가 `Category` enum, `Spot`/`SpotPage`/`SpotMap` 필드, `/v1` 경로 구현 여부를 대조한다.
+   머지 후 `make sync-api` → 코드 수정. `scripts/check-api-drift.sh`가 `Category` enum, `Spot`/`SpotPage`/`SpotMap`/`GeoReverse` 필드, `/v1` 경로 구현 여부를 대조한다.
    - 예: v1.0에서 `free` 카테고리는 없어졌다. 무료는 `Spot.isFree` + 쿼리 `free=true`(`SpotQuery.freeOnly`)다.
 4. **모듈 경계를 지킨다** (ADR 0001). 지도 SDK는 MapUI에서만, Features는 Domain 포트에만 의존.
 5. **테스트.** 뷰모델·매핑 로직은 `FakeSpotsService`/픽스처로 단위 테스트를 같이 쓴다. 네트워크·위치에 의존하는 테스트 금지.
@@ -77,7 +77,7 @@ Pretendard 글꼴은 `Resources/Fonts/`(SIL OFL 1.1, `OFL.txt` 동봉) — 앱 �
 
 - Release용 API 호스트 미정 (`project.yml` `HEREZI_API_BASE_URL`).
 - 네이버 지도 SDK 헤더의 iOS 26 deprecation 경고를 에러에서 제외 중 (ADR 0003).
-- 계약 드리프트 검사는 `Category`, 응답 스키마 3개(`Spot`/`SpotPage`/`SpotMap`) 필드, `/v1` 경로 존재만 본다(쿼리 파라미터는 단위 테스트로). 계약이 커지면 생성기(swift-openapi-generator 등) 검토.
+- 계약 드리프트 검사는 `Category`, 응답 스키마 4개(`Spot`/`SpotPage`/`SpotMap`/`GeoReverse`) 필드, `/v1` 경로 존재만 본다(쿼리 파라미터는 단위 테스트로). 계약이 커지면 생성기(swift-openapi-generator 등) 검토.
 
 ## 에이전트 역할
 역할별 지침은 [`agents/`](agents/README.md)에 있다(기획자·디자이너·리뷰어·QA·개발자). 어떤 LLM 도구든 역할을 맡으면 해당 파일(`agents/<역할>.md`)을 먼저 읽고 따른다. Claude Code는 `.claude/agents` 링크로 자동 인식한다.
