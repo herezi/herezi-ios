@@ -1,6 +1,7 @@
 # Herezi 에이전트 팀
 
-이 폴더의 서브에이전트는 Claude Code가 자동으로 인식한다(`.claude/agents/*.md`).
+역할 정의 원본은 이 `agents/` 폴더다. 일반 마크다운이라 어떤 LLM 도구든 읽을 수 있다.
+Claude Code는 `.claude/agents` → `agents/` 심볼릭 링크로 서브에이전트를 자동 인식한다. 다른 도구(Codex, Cursor, Gemini 등)는 `AGENTS.md`의 안내에 따라 해당 역할 파일을 읽고 그 지침을 따른다.
 세 레포(`herezi-api`, `herezi-ios`, `herezi-android`)에 같은 공통 역할이 있고, 개발자 역할만 레포마다 다르다.
 
 | 에이전트 | 역할 | 코드 수정 | 있는 레포 |
