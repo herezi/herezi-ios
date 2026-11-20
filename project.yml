@@ -72,6 +72,8 @@ targets:
     sources: [Sources/MapUI]
     dependencies:
       - target: Domain
+      # 핀·클러스터 색·글꼴 토큰 (DESIGN §6.6). DesignSystem은 MapUI를 모른다.
+      - target: DesignSystem
       - package: NMapsMap
 
   # Layer 1: 디자인 토큰·공통 컴포넌트 (herezi-api docs/design/DESIGN.md). SwiftUI + Domain만.
