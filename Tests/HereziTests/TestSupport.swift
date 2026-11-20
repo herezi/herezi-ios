@@ -22,6 +22,7 @@ enum Fixture {
 actor RecordingSpotsService: SpotsService {
     private let base: FakeSpotsService
     private(set) var queries: [SpotQuery] = []
+    private(set) var mapQueries: [SpotMapQuery] = []
 
     init(base: FakeSpotsService = FakeSpotsService()) {
         self.base = base
@@ -30,6 +31,11 @@ actor RecordingSpotsService: SpotsService {
     func spots(_ query: SpotQuery) async throws -> SpotPage {
         queries.append(query)
         return try await base.spots(query)
+    }
+
+    func spotsInBounds(_ query: SpotMapQuery) async throws -> SpotMap {
+        mapQueries.append(query)
+        return try await base.spotsInBounds(query)
     }
 
     func spot(id: String) async throws -> Spot {
@@ -50,4 +56,6 @@ struct DeniedLocationProvider: LocationProviding {
 enum TestData {
     static let now = Date(timeIntervalSince1970: 1_795_000_000)
     static var spots: [Spot] { SampleSpots.make(now: now) }
+    /// 목록·지도에 나오는 항목(끝난 항목 제외).
+    static var listedSpots: [Spot] { spots.filter { !$0.isEnded } }
 }

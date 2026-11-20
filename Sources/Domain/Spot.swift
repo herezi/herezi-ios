@@ -17,8 +17,12 @@ public struct Spot: Identifiable, Hashable, Sendable {
     public let imageURL: URL?
     public let source: String
     public let sourceURL: URL?
-    /// Distance from the requested location, in meters (server-computed).
+    /// 원본 소스에서 마지막으로 가져온 시각 (상세의 "갱신 시각").
+    public let fetchedAt: Date
+    /// Distance from the requested location, in meters (server-computed, `/v1/spots` only).
     public let distanceMeters: Int?
+    /// 응답 시각 기준으로 끝났는지. 목록·지도에는 끝난 항목이 오지 않으므로 상세에서만 true일 수 있다.
+    public let isEnded: Bool
 
     public init(
         id: String,
@@ -34,7 +38,9 @@ public struct Spot: Identifiable, Hashable, Sendable {
         imageURL: URL? = nil,
         source: String,
         sourceURL: URL? = nil,
-        distanceMeters: Int? = nil
+        fetchedAt: Date,
+        distanceMeters: Int? = nil,
+        isEnded: Bool = false
     ) {
         self.id = id
         self.title = title
@@ -49,7 +55,9 @@ public struct Spot: Identifiable, Hashable, Sendable {
         self.imageURL = imageURL
         self.source = source
         self.sourceURL = sourceURL
+        self.fetchedAt = fetchedAt
         self.distanceMeters = distanceMeters
+        self.isEnded = isEnded
     }
 }
 
@@ -61,6 +69,39 @@ public struct SpotPage: Hashable, Sendable {
     public init(items: [Spot], nextCursor: String? = nil) {
         self.items = items
         self.nextCursor = nextCursor
+    }
+}
+
+/// Result of `GET /v1/spots/map` (bbox). `truncated`면 영역 안에 `limit`보다 많은 항목이 있다.
+public struct SpotMap: Hashable, Sendable {
+    public let items: [Spot]
+    public let truncated: Bool
+
+    public init(items: [Spot], truncated: Bool) {
+        self.items = items
+        self.truncated = truncated
+    }
+}
+
+/// 지도 영역. 남서(sw)·북동(ne) 꼭짓점. 날짜변경선을 넘는 영역은 계약상 지원하지 않는다.
+public struct CoordinateBounds: Hashable, Sendable {
+    public let southWest: Coordinate
+    public let northEast: Coordinate
+
+    public init(southWest: Coordinate, northEast: Coordinate) {
+        self.southWest = southWest
+        self.northEast = northEast
+    }
+
+    public var center: Coordinate {
+        Coordinate(
+            latitude: (southWest.latitude + northEast.latitude) / 2,
+            longitude: (southWest.longitude + northEast.longitude) / 2)
+    }
+
+    public func contains(_ coordinate: Coordinate) -> Bool {
+        (southWest.latitude...northEast.latitude).contains(coordinate.latitude)
+            && (southWest.longitude...northEast.longitude).contains(coordinate.longitude)
     }
 }
 

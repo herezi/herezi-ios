@@ -21,7 +21,9 @@ struct SpotDTO: Decodable, Sendable {
     let imageURL: URL?
     let source: String
     let sourceURL: URL?
+    let fetchedAt: Date
     let distanceMeters: Int?
+    let isEnded: Bool
 
     enum CodingKeys: String, CodingKey {
         case id = "id"
@@ -38,7 +40,9 @@ struct SpotDTO: Decodable, Sendable {
         case imageURL = "image_url"
         case source = "source"
         case sourceURL = "source_url"
+        case fetchedAt = "fetched_at"
         case distanceMeters = "distance_m"
+        case isEnded = "is_ended"
     }
 
     /// Returns nil for categories this app version does not know yet (forward compatible).
@@ -48,7 +52,7 @@ struct SpotDTO: Decodable, Sendable {
             id: id, title: title, summary: summary, category: category,
             coordinate: Coordinate(latitude: lat, longitude: lng), address: address, placeName: placeName,
             startsAt: startsAt, endsAt: endsAt, isFree: isFree, imageURL: imageURL, source: source,
-            sourceURL: sourceURL, distanceMeters: distanceMeters)
+            sourceURL: sourceURL, fetchedAt: fetchedAt, distanceMeters: distanceMeters, isEnded: isEnded)
     }
 }
 
@@ -64,6 +68,21 @@ struct SpotPageDTO: Decodable, Sendable {
 
     func toDomain() -> SpotPage {
         SpotPage(items: items.compactMap { $0.toDomain() }, nextCursor: nextCursor)
+    }
+}
+
+/// `components.schemas.SpotMap`
+struct SpotMapDTO: Decodable, Sendable {
+    let items: [SpotDTO]
+    let truncated: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case items = "items"
+        case truncated = "truncated"
+    }
+
+    func toDomain() -> SpotMap {
+        SpotMap(items: items.compactMap { $0.toDomain() }, truncated: truncated)
     }
 }
 

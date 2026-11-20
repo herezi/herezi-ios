@@ -24,6 +24,22 @@ public enum SpotFormatting {
         return "\(startText) – \(shortDate(end, calendar: calendar))"
     }
 
+    /// 갱신 시각의 상대 표현: "방금", "5분 전", "3시간 전", "2일 전". 30일이 넘으면 날짜("11.20")로.
+    /// 시계가 어긋나 미래 시각이 오면 "방금"으로 본다.
+    public static func relativeTime(_ date: Date, now: Date) -> String {
+        let seconds = max(0, Int(now.timeIntervalSince(date)))
+        switch seconds {
+        case ..<60: return "방금"
+        case ..<3_600: return "\(seconds / 60)분 전"
+        case ..<86_400: return "\(seconds / 3_600)시간 전"
+        case ..<(30 * 86_400): return "\(seconds / 86_400)일 전"
+        default:
+            var calendar = Calendar(identifier: .gregorian)
+            calendar.timeZone = seoul
+            return shortDate(date, calendar: calendar)
+        }
+    }
+
     private static func shortDate(_ date: Date, calendar: Calendar) -> String {
         let parts = calendar.dateComponents([.month, .day], from: date)
         return String(format: "%d.%02d", parts.month ?? 0, parts.day ?? 0)

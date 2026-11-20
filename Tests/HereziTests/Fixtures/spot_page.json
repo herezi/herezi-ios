@@ -15,7 +15,9 @@
       "image_url": "https://example.com/lantern.jpg",
       "source": "tourapi",
       "source_url": "https://korean.visitkorea.or.kr/detail/ms_detail.do?cotid=2771234",
-      "distance_m": 280
+      "fetched_at": "2026-11-20T09:30:00+09:00",
+      "distance_m": 280,
+      "is_ended": false
     },
     {
       "id": "kopis-PF999",
@@ -24,7 +26,9 @@
       "lat": 37.572,
       "lng": 126.9769,
       "starts_at": "2026-11-21T09:00:00.123Z",
-      "source": "kopis"
+      "source": "kopis",
+      "fetched_at": "2026-11-20T00:00:00Z",
+      "is_ended": false
     },
     {
       "id": "future-1",
@@ -33,7 +37,9 @@
       "lat": 37.57,
       "lng": 126.98,
       "starts_at": "2026-11-21T09:00:00Z",
-      "source": "seoul_culture"
+      "source": "seoul_culture",
+      "fetched_at": "2026-11-20T00:00:00Z",
+      "is_ended": false
     }
   ],
   "next_cursor": "eyJvZmZzZXQiOjMwfQ"

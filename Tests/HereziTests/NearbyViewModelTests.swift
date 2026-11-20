@@ -28,7 +28,7 @@ struct NearbyViewModelTests {
 
         await viewModel.toggle(.festival)
         #expect(viewModel.selectedCategories.isEmpty)
-        #expect(viewModel.visibleSpots.count == TestData.spots.count)
+        #expect(viewModel.visibleSpots.count == TestData.listedSpots.count)
     }
 
     @Test func 무료만_필터는_free_쿼리로_전달되고_무료_항목만_남긴다() async {
@@ -85,7 +85,7 @@ struct NearbyViewModelTests {
         let near = TestData.spots[0]
         let unknown = Spot(
             id: "x", title: "거리 모름", category: .festival, coordinate: .seoulCityHall,
-            startsAt: TestData.now, source: "test")
+            startsAt: TestData.now, source: "test", fetchedAt: TestData.now)
 
         let sorted = NearbyViewModel.filter([unknown, near], categories: [])
 
