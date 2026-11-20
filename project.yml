@@ -100,6 +100,8 @@ targets:
       - target: FeatureNearby
       - target: FeatureSpotDetail
       - target: MapUI
+      # MapUI가 링크하는 동적 프레임워크를 앱 번들에 임베드한다 (없으면 실행 즉시 dyld 크래시).
+      - package: NMapsMap
       - sdk: CoreLocation.framework
     info:
       path: Sources/App/Info.plist

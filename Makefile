@@ -10,7 +10,7 @@ SWIFT_FORMAT := $(shell xcrun --find swift-format 2>/dev/null)
 XCODEBUILD   := xcodebuild -project $(PROJECT) -scheme $(SCHEME) -derivedDataPath $(DERIVED_DATA) \
                 -destination '$(DESTINATION)' CODE_SIGNING_ALLOWED=NO
 
-.PHONY: help generate sync-api lint format verify-static build test check clean
+.PHONY: help generate sync-api lint format verify-static build verify-bundle test check clean
 
 help: ## 명령 목록
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  make %-14s %s\n", $$1, $$2}'
@@ -42,7 +42,12 @@ verify-static: ## 모듈 경계 + API 계약 드리프트 검사
 build: generate ## 앱 + 테스트 빌드 (시뮬레이터)
 	$(XCODEBUILD) build-for-testing -quiet
 
-test: build ## 단위 테스트 실행 (시뮬레이터)
+verify-bundle: build ## 앱 번들에 동적 프레임워크(NMapsMap)가 임베드됐는지 검사 (없으면 실행 즉시 크래시)
+	@test -d "$(DERIVED_DATA)/Build/Products/Debug-iphonesimulator/Herezi.app/Frameworks/NMapsMap.framework" \
+		|| { echo "verify-bundle: Herezi.app에 NMapsMap.framework가 없음 — project.yml 앱 타깃에 package: NMapsMap 필요"; exit 1; }
+	@echo "verify-bundle: OK"
+
+test: verify-bundle ## 단위 테스트 실행 (시뮬레이터)
 	$(XCODEBUILD) test-without-building -quiet
 
 check: lint verify-static test ## PR 전에 반드시 통과해야 하는 전체 검사 (CI와 동일)
