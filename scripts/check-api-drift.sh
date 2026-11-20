@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # api/openapi.yaml(계약)과 Swift 코드가 어긋나지 않았는지 검사한다.
 #  1) components.schemas.Category enum == SpotCategory case 목록
-#  2) components.schemas.{Spot,SpotPage,SpotMap} properties == 각 DTO CodingKeys 의 JSON 이름
+#  2) components.schemas.{Spot,SpotPage,SpotMap,GeoReverse} properties == 각 DTO CodingKeys 의 JSON 이름
 #  3) 계약의 paths 를 LiveSpotsService가 모두 부르는지
 # 계약을 바꾸려면 herezi-api에서 먼저 바꾸고 `make sync-api` 후 코드를 맞춘다.
 set -euo pipefail
@@ -38,7 +38,7 @@ schema_props() {
     $0 ~ "^    " name ":" { in_schema = 1; next }
     in_schema && /^    [A-Za-z]/ { exit }
     in_schema && /^      properties:/ { in_props = 1; next }
-    in_props && /^        [a-z_]+:/ { key = $1; sub(/:$/, "", key); print key }
+    in_props && /^        [a-z_0-9]+:/ { key = $1; sub(/:$/, "", key); print key }
   ' "$spec" | sort
 }
 
@@ -52,7 +52,7 @@ dto_keys() {
   ' Sources/Networking/DTOs.swift | sort
 }
 
-for pair in Spot:SpotDTO SpotPage:SpotPageDTO SpotMap:SpotMapDTO; do
+for pair in Spot:SpotDTO SpotPage:SpotPageDTO SpotMap:SpotMapDTO GeoReverse:GeoReverseDTO; do
   schema=${pair%%:*}
   dto=${pair##*:}
   spec_keys=$(schema_props "$schema")

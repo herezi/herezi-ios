@@ -1,7 +1,8 @@
 import Domain
 import Foundation
 
-/// `SpotsService` backed by the real Herezi API (`GET /v1/spots`, `GET /v1/spots/map`, `GET /v1/spots/{id}`).
+/// `SpotsService` backed by the real Herezi API (`GET /v1/spots`, `GET /v1/spots/map`, `GET /v1/spots/{id}`,
+/// `GET /v1/geo/reverse`).
 public struct LiveSpotsService: SpotsService {
     private let client: APIClient
 
@@ -29,6 +30,16 @@ public struct LiveSpotsService: SpotsService {
             throw APIError.decoding("Unknown category \(dto.category)")
         }
         return spot
+    }
+
+    public func reverseGeocode(_ coordinate: Coordinate) async throws -> String {
+        try await client.get(
+            GeoReverseDTO.self, path: "/v1/geo/reverse",
+            query: [
+                URLQueryItem(name: "lat", value: String(coordinate.latitude)),
+                URLQueryItem(name: "lng", value: String(coordinate.longitude)),
+            ]
+        ).label
     }
 
     static func queryItems(for query: SpotQuery) -> [URLQueryItem] {

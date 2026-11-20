@@ -2,8 +2,7 @@ import CoreLocation
 import Domain
 
 /// `PlaceNaming` with CLGeocoder: "구 동" (예: "중구 태평로1가"). 실패하면 nil → 화면은 "내 주변".
-/// TODO: Apple 역지오코딩은 서울 주소에서 구를 주지 않는 경우가 많아 "태평로1가"만 나온다.
-/// 구까지 필요하면 네이버 역지오코딩 등 다른 소스를 검토한다.
+/// 서버 역지오코딩(`ServerPlaceNaming`)이 실패했을 때의 대체다. Apple 역지오코딩은 서울에서 구를 빼는 일이 많다("태평로1가").
 @MainActor
 final class GeocoderPlaceNaming: PlaceNaming {
     private let geocoder = CLGeocoder()
