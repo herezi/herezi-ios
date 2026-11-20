@@ -76,3 +76,6 @@ docs/exec-plans/         실행 계획 (active/ → completed/)
 - Release용 API 호스트 미정 (`project.yml` `HEREZI_API_BASE_URL`).
 - 네이버 지도 SDK 헤더의 iOS 26 deprecation 경고를 에러에서 제외 중 (ADR 0003).
 - 계약 드리프트 검사는 `Category`/`Spot`만 본다. 계약이 커지면 생성기(swift-openapi-generator 등) 검토.
+
+## 에이전트 역할
+역할별 지침은 [`agents/`](agents/README.md)에 있다(기획자·디자이너·리뷰어·QA·개발자). 어떤 LLM 도구든 역할을 맡으면 해당 파일(`agents/<역할>.md`)을 먼저 읽고 따른다. Claude Code는 `.claude/agents` 링크로 자동 인식한다.
