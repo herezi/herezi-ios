@@ -7,6 +7,8 @@ import UIKit
 public struct SettingsView: View {
     @State private var viewModel: SettingsViewModel
     @State private var showsSources = false
+    @State private var showsLicenses = false
+    @State private var browser: BrowserLink?
     @Environment(\.openURL) private var openURL
     @Environment(\.scenePhase) private var scenePhase
 
@@ -25,6 +27,13 @@ public struct SettingsView: View {
                 }
                 group("정보") {
                     SettingsRow(title: "정보 출처", chevron: true) { showsSources = true }
+                    SettingsRow(title: "이용약관", chevron: true) { browser = BrowserLink(SettingsViewModel.termsURL) }
+                        .accessibilityHint("브라우저가 열려요")
+                    SettingsRow(title: "개인정보 처리방침", chevron: true) {
+                        browser = BrowserLink(SettingsViewModel.privacyURL)
+                    }
+                    .accessibilityHint("브라우저가 열려요")
+                    SettingsRow(title: "오픈소스 라이선스", chevron: true) { showsLicenses = true }
                 }
                 group("도움") {
                     VStack(alignment: .leading, spacing: 0) {
@@ -56,6 +65,10 @@ public struct SettingsView: View {
         .navigationTitle("설정")
         .navigationBarTitleDisplayMode(.large)
         .navigationDestination(isPresented: $showsSources) { SourcesView() }
+        .navigationDestination(isPresented: $showsLicenses) { LicensesView() }
+        .sheet(item: $browser) { link in
+            SafariView(url: link.url).ignoresSafeArea()
+        }
         .hzToast(message: $viewModel.toastMessage)
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { viewModel.refresh() }
@@ -164,5 +177,48 @@ struct SourcesView: View {
         .sheet(item: $browser) { link in
             SafariView(url: link.url).ignoresSafeArea()
         }
+    }
+}
+
+/// 오픈소스 라이선스: 이름·라이선스 이름 + 번들에 든 라이선스 전문.
+struct LicensesView: View {
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: HZSpace.s6) {
+                ForEach(SettingsViewModel.openSourceLicenses) { item in
+                    VStack(alignment: .leading, spacing: HZSpace.s2) {
+                        Text(item.name)
+                            .hzText(.title3)
+                            .foregroundStyle(Color.hz.textPrimary)
+                            .accessibilityAddTraits(.isHeader)
+                        Text(item.license)
+                            .font(Font.hz.caption)
+                            .foregroundStyle(Color.hz.textSecondary)
+                        Link(item.url.absoluteString, destination: item.url)
+                            .font(Font.hz.caption)
+                            .foregroundStyle(Color.hz.textSecondary)
+                        if let text = Self.text(item.licenseFile) {
+                            Text(text)
+                                .font(.system(size: 12, design: .monospaced))
+                                .foregroundStyle(Color.hz.textSecondary)
+                                .textSelection(.enabled)
+                                .padding(HZSpace.s3)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(Color.hz.bgSecondary, in: RoundedRectangle(cornerRadius: HZRadius.md))
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal, HZSpace.screen)
+            .padding(.vertical, HZSpace.s4)
+        }
+        .background(Color.hz.bgPrimary)
+        .navigationTitle("오픈소스 라이선스")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private static func text(_ file: String) -> String? {
+        guard let url = Bundle.main.resourceURL?.appending(path: file) else { return nil }
+        return try? String(contentsOf: url, encoding: .utf8)
     }
 }

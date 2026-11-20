@@ -91,7 +91,7 @@ public struct SpotCard: View {
     private var period: some View {
         let period = SpotFormatting.cardPeriod(start: spot.startsAt, end: spot.endsAt, now: now)
         return Text(period.text)
-            .font(period.emphasized ? Font.hz.caption.weight(.semibold) : Font.hz.caption.monospacedDigit())
+            .font(period.emphasized ? HZTextStyle.caption.font(weight: .semibold) : Font.hz.caption.monospacedDigit())
             .foregroundStyle(period.emphasized ? Color.hz.textPrimary : Color.hz.textSecondary)
     }
 

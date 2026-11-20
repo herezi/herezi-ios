@@ -40,6 +40,14 @@ struct SettingsViewModelTests {
         viewModel.showMailUnavailable()
         #expect(viewModel.toastMessage == "메일 앱이 없어요. help@herezi.com 으로 보내 주세요")
     }
+
+    @Test func 약관_링크와_오픈소스_라이선스() {
+        #expect(SettingsViewModel.termsURL.absoluteString == "https://herezi.github.io/terms/")
+        #expect(SettingsViewModel.privacyURL.absoluteString == "https://herezi.github.io/privacy/")
+        let pretendard = SettingsViewModel.openSourceLicenses.first { $0.name == "Pretendard" }
+        #expect(pretendard?.license == "SIL Open Font License 1.1")
+        #expect(pretendard?.licenseFile == "Fonts/OFL.txt")
+    }
 }
 
 @MainActor

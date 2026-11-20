@@ -205,7 +205,7 @@ struct WhenTabs: View {
                         withAnimation(HZMotion.fast) { onSelect(option) }
                     } label: {
                         Text(option.displayName)
-                            .font(.system(size: HZTextStyle.title3.scaledSize, weight: isSelected ? .bold : .semibold))
+                            .font(HZTextStyle.title3.font(weight: isSelected ? .bold : .semibold))
                             .foregroundStyle(isSelected ? Color.hz.textPrimary : Color.hz.textTertiary)
                             .frame(minHeight: 44)
                     }
@@ -294,7 +294,7 @@ struct FloatingPill: View {
         Button(action: action) {
             HStack(spacing: 6) {
                 Image(systemName: symbol).font(.system(size: 14, weight: .semibold))
-                Text(title).font(Font.hz.caption.bold())
+                Text(title).font(HZTextStyle.caption.font(weight: .bold))
             }
             .foregroundStyle(Color.hz.textInverse)
             .padding(.horizontal, HZSpace.s4)

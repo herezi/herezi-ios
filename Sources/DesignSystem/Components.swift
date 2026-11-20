@@ -269,7 +269,7 @@ private struct ToastModifier: ViewModifier {
                             action()
                             toast = nil
                         }
-                        .font(Font.hz.caption.bold())
+                        .font(HZTextStyle.caption.font(weight: .bold))
                         .foregroundStyle(Color.hz.textInverse)
                     }
                 }

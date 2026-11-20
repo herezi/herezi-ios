@@ -42,7 +42,7 @@ public struct SpotImagePlaceholder: View {
                     HStack(alignment: .top) {
                         if options.showsLabel {
                             Text(spot.category.displayName)
-                                .font(.system(size: max(10, titleSize * 0.55), weight: .semibold))
+                                .font(HZFontFamily.font(fixedSize: max(10, titleSize * 0.55), weight: .bold))
                                 .foregroundStyle(.white)
                                 .lineLimit(1)
                                 .padding(.horizontal, 8)
@@ -55,7 +55,8 @@ public struct SpotImagePlaceholder: View {
                     Spacer(minLength: 0)
                     if options.showsTitle {
                         Text(spot.title)
-                            .font(.system(size: titleSize, weight: .heavy))
+                            // DESIGN은 ExtraBold(800)지만 번들은 4굵기(Regular~Bold)만 — Bold로 대체.
+                            .font(HZFontFamily.font(fixedSize: titleSize, weight: .bold))
                             .lineSpacing(-titleSize * 0.15)
                             .foregroundStyle(.white)
                             .lineLimit(3)
