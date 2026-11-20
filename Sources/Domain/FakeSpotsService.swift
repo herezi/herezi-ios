@@ -73,6 +73,50 @@ public enum SampleSpots {
     /// 끝난 샘플 항목의 id. 목록·지도에는 나오지 않고 상세(`spot(id:)`)로만 열린다.
     public static let endedID = "sample-ended"
 
+    /// Debug 앱에서 홈 섹션이 고루 보이도록 더한 샘플 (테스트는 `make(now:)`만 쓴다).
+    public static var demo: [Spot] { makeDemo(now: Date()) }
+
+    public static func makeDemo(now: Date) -> [Spot] {
+        let day: TimeInterval = 86_400
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Asia/Seoul") ?? .current
+        let today = calendar.startOfDay(for: now)
+        let tonight = today.addingTimeInterval(22 * 3_600)
+        let extra = [
+            Spot(
+                id: "demo-1", title: "정동길 가을 산책", category: .nature,
+                coordinate: Coordinate(latitude: 37.5658, longitude: 126.9720), placeName: "정동길",
+                startsAt: now.addingTimeInterval(-5 * day), endsAt: tonight, isFree: true, source: "seoul_culture",
+                fetchedAt: now.addingTimeInterval(-3_600), distanceMeters: 520),
+            Spot(
+                id: "demo-2", title: "남산 단풍 명소", category: .nature,
+                coordinate: Coordinate(latitude: 37.5512, longitude: 126.9882), placeName: "남산공원",
+                startsAt: now.addingTimeInterval(-10 * day), endsAt: now.addingTimeInterval(6 * day), isFree: true,
+                source: "tourapi", fetchedAt: now.addingTimeInterval(-7_200), distanceMeters: 1_900),
+            Spot(
+                id: "demo-3", title: "서울광장 스케이트장 개장 행사", category: .festival,
+                coordinate: Coordinate(latitude: 37.5658, longitude: 126.9780), placeName: "서울광장",
+                startsAt: now.addingTimeInterval(-3 * day), endsAt: tonight, isFree: true, source: "tourapi",
+                fetchedAt: now.addingTimeInterval(-600), distanceMeters: 60),
+            Spot(
+                id: "demo-4", title: "청계천 야시장", category: .food,
+                coordinate: Coordinate(latitude: 37.5687, longitude: 126.9810), placeName: "청계천",
+                startsAt: now.addingTimeInterval(-day), endsAt: tonight, source: "news",
+                fetchedAt: now.addingTimeInterval(-1_800), distanceMeters: 410),
+            Spot(
+                id: "demo-5", title: "세종 체임버 콘서트", category: .performance,
+                coordinate: Coordinate(latitude: 37.5726, longitude: 126.9760), placeName: "세종문화회관",
+                startsAt: now.addingTimeInterval(-2 * day), endsAt: now.addingTimeInterval(8 * day), source: "kopis",
+                fetchedAt: now.addingTimeInterval(-900), distanceMeters: 700),
+            Spot(
+                id: "demo-6", title: "반려견 산책 페스티벌", category: .pet,
+                coordinate: Coordinate(latitude: 37.5700, longitude: 126.9700), placeName: "경희궁 앞",
+                startsAt: now.addingTimeInterval(-day), endsAt: now.addingTimeInterval(9 * day), isFree: true,
+                source: "news", fetchedAt: now.addingTimeInterval(-4_000), distanceMeters: 860),
+        ]
+        return make(now: now) + extra
+    }
+
     public static func make(now: Date) -> [Spot] {
         let day: TimeInterval = 86_400
         return [

@@ -1,5 +1,6 @@
 import DesignSystem
 import Domain
+import FeatureHome
 import FeatureNearby
 import FeatureOnboarding
 import FeatureSaved
@@ -29,42 +30,80 @@ struct HereziApp: App {
 @MainActor
 @Observable
 final class AppModel {
+    /// 하단 탭 (DESIGN §6.12): 주변 · 지도 · 저장. 설정은 저장 탭 톱니.
+    enum Tab: Hashable {
+        case nearby, map, saved
+    }
+
+    /// 탭 안에서 push 하는 화면.
+    enum Route: Hashable {
+        case search
+        case settings
+        case spot(id: String)
+        /// S1b 전체 목록 + 시작 필터.
+        case list(HomeListFilter)
+    }
+
     let service = AppEnvironment.makeSpotsService()
-    let location = CoreLocationProvider()
+    let location = CoreLocationProvider(timeout: .seconds(5))
+    let naming = GeocoderPlaceNaming()
     let saved = SavedSpotsStore()
     let recents = RecentSearchesStore()
-    let nearby: NearbyViewModel
+    let home: HomeViewModel
+    let map: NearbyViewModel
     var showsOnboarding: Bool
-    var path = NavigationPath()
+    var tab: Tab = .nearby
+    var nearbyPath = NavigationPath()
+    var mapPath = NavigationPath()
+    var savedPath = NavigationPath()
 
     init() {
-        nearby = NearbyViewModel(service: service, location: location)
+        home = HomeViewModel(service: service, location: location, naming: naming, saved: saved)
+        map = NearbyViewModel(service: service, location: location)
         showsOnboarding = OnboardingViewModel.shouldShow(permission: location.permission)
         #if DEBUG
             DebugLaunch.apply(to: self)
         #endif
     }
 
-    /// 화면 이동 (주변 화면의 상단 바 입구, 상세 404의 "주변 보기" 등).
-    enum Route: Hashable {
-        case search
-        case saved
-        case settings
-        case spot(id: String)
+    /// 이미 선택된 탭을 다시 누르면 첫 화면으로.
+    func select(_ newTab: Tab) {
+        if newTab == tab {
+            switch newTab {
+            case .nearby: nearbyPath = NavigationPath()
+            case .map: mapPath = NavigationPath()
+            case .saved: savedPath = NavigationPath()
+            }
+        }
+        tab = newTab
     }
 
-    func popToRoot() {
-        path = NavigationPath()
+    /// S1b "지도로 보기" → 지도 탭으로 필터를 넘긴다.
+    func showMap(_ filter: HomeListFilter) {
+        tab = .map
+        Task { await map.apply(filter) }
     }
 
-    /// 위치를 알면 실제 위치, 모르면 서울시청 (검색·저장 거리 기준).
+    /// S2 "목록으로 보기" → 주변 탭에서 S1b를 그 필터로.
+    func showList(_ filter: HomeListFilter) {
+        tab = .nearby
+        nearbyPath.append(Route.list(filter))
+    }
+
+    func goHome() {
+        nearbyPath = NavigationPath()
+        tab = .nearby
+    }
+
+    /// 위치를 알면 실제 위치 (저장 거리 계산용). 서울시청 기준이면 nil.
     var knownCoordinate: Coordinate? {
-        nearby.isUsingFallbackLocation ? nil : nearby.coordinate
+        home.isUsingFallbackLocation ? nil : home.coordinate
     }
 }
 
 struct RootView: View {
     @Bindable var app: AppModel
+    @Environment(\.openURL) private var openURL
 
     var body: some View {
         ZStack {
@@ -76,37 +115,67 @@ struct RootView: View {
                 )
                 .transition(.opacity)
             } else {
-                NavigationStack(path: $app.path) {
-                    NearbyView(
-                        viewModel: app.nearby,
-                        onSearch: { app.path.append(AppModel.Route.search) },
-                        onSaved: { app.path.append(AppModel.Route.saved) },
-                        onSettings: { app.path.append(AppModel.Route.settings) }
-                    )
-                    .navigationDestination(for: Spot.self) { spot in
-                        detail(id: spot.id, initial: spot)
-                    }
-                    .navigationDestination(for: AppModel.Route.self) { route in
-                        destination(route)
-                    }
-                }
-                .transition(.opacity)
+                tabs.transition(.opacity)
             }
         }
         .animation(HZMotion.base, value: app.showsOnboarding)
     }
 
-    @ViewBuilder private func destination(_ route: AppModel.Route) -> some View {
+    private var tabs: some View {
+        TabView(selection: Binding(get: { app.tab }, set: { app.select($0) })) {
+            NavigationStack(path: $app.nearbyPath) {
+                HomeView(
+                    viewModel: app.home, banner: banner,
+                    onSearch: { app.nearbyPath.append(AppModel.Route.search) },
+                    onOpenList: { app.nearbyPath.append(AppModel.Route.list($0)) },
+                    onShowMap: { app.tab = .map }
+                )
+                .destinations(app: app, root: self)
+            }
+            .tabItem { Label("주변", systemImage: "location.circle") }
+            .tag(AppModel.Tab.nearby)
+
+            NavigationStack(path: $app.mapPath) {
+                NearbyMapScreen(viewModel: app.map, banner: banner, onShowList: app.showList)
+                    .destinations(app: app, root: self)
+            }
+            .tabItem { Label("지도", systemImage: "map") }
+            .tag(AppModel.Tab.map)
+
+            NavigationStack(path: $app.savedPath) {
+                SavedView(
+                    viewModel: SavedViewModel(store: app.saved, service: app.service, origin: app.knownCoordinate),
+                    onBrowse: app.goHome,
+                    onSettings: { app.savedPath.append(AppModel.Route.settings) }
+                )
+                .destinations(app: app, root: self)
+            }
+            .tabItem { Label("저장", systemImage: "bookmark") }
+            .tag(AppModel.Tab.saved)
+        }
+    }
+
+    /// 위치 꺼짐 배너: 한 번도 묻지 않았으면 "허용하기"(권한 창), 아니면 "설정"(설정 앱).
+    var banner: LocationBannerConfig {
+        if app.location.permission == .notDetermined {
+            return LocationBannerConfig(actionTitle: "허용하기") {
+                Task {
+                    if await app.location.requestWhenInUse().isGranted { await app.home.reload() }
+                }
+            }
+        }
+        return LocationBannerConfig(actionTitle: "설정") {
+            if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
+        }
+    }
+
+    @ViewBuilder func destination(_ route: AppModel.Route) -> some View {
         switch route {
         case .search:
             SearchView(
                 viewModel: SearchViewModel(
-                    service: app.service, recents: app.recents, origin: app.nearby.coordinate ?? .seoulCityHall),
+                    service: app.service, recents: app.recents, origin: app.home.coordinate ?? .seoulCityHall),
                 initialQuery: DebugLaunch.searchQuery)
-        case .saved:
-            SavedView(
-                viewModel: SavedViewModel(store: app.saved, service: app.service, origin: app.knownCoordinate),
-                onBrowse: app.popToRoot)
         case .settings:
             SettingsView(
                 viewModel: SettingsViewModel(
@@ -114,15 +183,31 @@ struct RootView: View {
                     osVersion: UIDevice.current.systemVersion))
         case .spot(let id):
             detail(id: id, initial: nil)
+        case .list(let filter):
+            NearbyView(
+                viewModel: NearbyViewModel(
+                    service: app.service, location: app.location, filter: filter, origin: app.home.coordinate,
+                    isUsingFallbackLocation: app.home.isUsingFallbackLocation),
+                placeName: app.home.placeName ?? "내 주변", banner: banner,
+                onSearch: { app.nearbyPath.append(AppModel.Route.search) },
+                onShowMap: app.showMap)
         }
     }
 
-    private func detail(id: String, initial: Spot?) -> some View {
+    func detail(id: String, initial: Spot?) -> some View {
         SpotDetailView(
             viewModel: SpotDetailViewModel(
                 id: id, initial: initial, service: app.service, saved: app.saved,
-                usesFallbackLocation: app.nearby.isUsingFallbackLocation),
-            onGoHome: app.popToRoot)
+                usesFallbackLocation: app.home.isUsingFallbackLocation),
+            onGoHome: app.goHome)
+    }
+}
+
+extension View {
+    /// 각 탭의 NavigationStack에 같은 목적지를 등록한다.
+    fileprivate func destinations(app: AppModel, root: RootView) -> some View {
+        navigationDestination(for: Spot.self) { spot in root.detail(id: spot.id, initial: spot) }
+            .navigationDestination(for: AppModel.Route.self) { route in root.destination(route) }
     }
 }
 
@@ -142,7 +227,7 @@ enum AppEnvironment {
 
     static func makeSpotsService() -> any SpotsService {
         if usesFakeAPI() {
-            return FakeSpotsService()
+            return FakeSpotsService(spots: SampleSpots.demo)
         }
         return LiveSpotsService(client: APIClient(baseURL: APIClient.baseURL()))
     }
@@ -160,7 +245,7 @@ enum AppEnvironment {
 ///
 ///     xcrun simctl launch booted com.herezi.app -HZScreen search -HZSearchQuery 광화문
 ///
-/// - `-HZScreen onboarding|search|saved|settings|detail|detail-ended`
+/// - `-HZScreen onboarding|home|list|map|search|saved|settings|detail|detail-ended`
 /// - `-HZSearchQuery <검색어>`: 검색 화면을 열자마자 조회
 /// - `-HZSeedSaved YES`: 샘플 볼거리를 저장 목록에 넣는다
 enum DebugLaunch {
@@ -194,11 +279,15 @@ enum DebugLaunch {
         guard let screen else { return }
         app.showsOnboarding = screen == "onboarding"
         switch screen {
-        case "search": app.path.append(AppModel.Route.search)
-        case "saved": app.path.append(AppModel.Route.saved)
-        case "settings": app.path.append(AppModel.Route.settings)
-        case "detail": app.path.append(AppModel.Route.spot(id: "sample-1"))
-        case "detail-ended": app.path.append(AppModel.Route.spot(id: SampleSpots.endedID))
+        case "search": app.nearbyPath.append(AppModel.Route.search)
+        case "list": app.nearbyPath.append(AppModel.Route.list(HomeListFilter(when: .week)))
+        case "map": app.tab = .map
+        case "saved": app.tab = .saved
+        case "settings":
+            app.tab = .saved
+            app.savedPath.append(AppModel.Route.settings)
+        case "detail": app.nearbyPath.append(AppModel.Route.spot(id: "sample-1"))
+        case "detail-ended": app.nearbyPath.append(AppModel.Route.spot(id: SampleSpots.endedID))
         default: break
         }
     }

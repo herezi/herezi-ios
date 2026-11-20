@@ -111,6 +111,12 @@ public protocol LocationPermissionProviding: AnyObject {
     func requestWhenInUse() async -> LocationPermission
 }
 
+/// Port: 좌표 → 짧은 위치명("중구 태평로1가"). App 레이어가 역지오코딩으로 구현한다. 실패하면 nil.
+@MainActor
+public protocol PlaceNaming {
+    func placeName(for coordinate: Coordinate) async -> String?
+}
+
 /// Port: the user's current location. Implemented in the App layer with CoreLocation.
 @MainActor
 public protocol LocationProviding {

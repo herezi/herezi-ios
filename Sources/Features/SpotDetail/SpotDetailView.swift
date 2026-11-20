@@ -26,6 +26,8 @@ public struct SpotDetailView: View {
             .toolbarBackground(barVisible || viewModel.spot == nil ? .visible : .hidden, for: .navigationBar)
             .toolbarBackground(Color.hz.bgPrimary, for: .navigationBar)
             .toolbar { toolbarItems }
+            // 하단 길찾기 바와 겹치지 않게 상세에서는 탭 바를 숨긴다.
+            .toolbar(.hidden, for: .tabBar)
             .task { await viewModel.load() }
             .hzToast(message: $viewModel.toastMessage)
             .sheet(item: $browser) { link in
@@ -67,7 +69,7 @@ public struct SpotDetailView: View {
             let threshold = outer.safeAreaInsets.top + 44
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    hero(spot)
+                    hero(spot, topInset: threshold)
                         .onGeometryChange(for: Bool.self) { proxy in
                             proxy.frame(in: .scrollView).maxY < threshold
                         } action: { passed in
@@ -113,10 +115,10 @@ public struct SpotDetailView: View {
         }
     }
 
-    private func hero(_ spot: Spot) -> some View {
+    private func hero(_ spot: Spot, topInset: CGFloat) -> some View {
         Color.clear
             .aspectRatio(4 / 3, contentMode: .fit)
-            .overlay { SpotImage(spot: spot, iconSize: 56) }
+            .overlay { SpotImage(spot: spot, fallback: .poster(.init(topInset: topInset))) }
             .clipped()
     }
 

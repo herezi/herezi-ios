@@ -97,6 +97,13 @@ targets:
       - target: Domain
       - target: DesignSystem
 
+  FeatureHome:
+    templates: [Module]
+    sources: [Sources/Features/Home]
+    dependencies:
+      - target: Domain
+      - target: DesignSystem
+
   FeatureSaved:
     templates: [Module]
     sources: [Sources/Features/Saved]
@@ -134,6 +141,7 @@ targets:
       - target: Domain
       - target: Networking
       - target: DesignSystem
+      - target: FeatureHome
       - target: FeatureNearby
       - target: FeatureSpotDetail
       - target: FeatureSaved
@@ -178,6 +186,7 @@ targets:
       - target: Domain
       - target: Networking
       - target: DesignSystem
+      - target: FeatureHome
       - target: FeatureNearby
       - target: FeatureSpotDetail
       - target: FeatureSaved

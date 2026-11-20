@@ -109,3 +109,50 @@ struct ScriptedDetailService: SpotsService {
         }
     }
 }
+
+/// 정해진 위치명을 돌려주는 `PlaceNaming`.
+struct FixedPlaceNaming: PlaceNaming {
+    let name: String?
+
+    func placeName(for coordinate: Coordinate) async -> String? { name }
+}
+
+/// 중간에 실패하도록 바꿀 수 있는 서비스.
+actor ToggleFailingService: SpotsService {
+    struct Offline: Error {}
+
+    private let base: FakeSpotsService
+    private var failing = false
+
+    init(base: FakeSpotsService) {
+        self.base = base
+    }
+
+    func setFailing(_ value: Bool) { failing = value }
+
+    func spots(_ query: SpotQuery) async throws -> SpotPage {
+        if failing { throw Offline() }
+        return try await base.spots(query)
+    }
+
+    func spotsInBounds(_ query: SpotMapQuery) async throws -> SpotMap { try await base.spotsInBounds(query) }
+    func spot(id: String) async throws -> Spot { try await base.spot(id: id) }
+}
+
+/// 커서마다 정해진 페이지를 돌려주는 서비스.
+actor PagedService: SpotsService {
+    private let pages: [SpotPage]
+    private(set) var cursors: [String?] = []
+
+    init(pages: [SpotPage]) {
+        self.pages = pages
+    }
+
+    func spots(_ query: SpotQuery) async throws -> SpotPage {
+        cursors.append(query.cursor)
+        return query.cursor == nil ? pages[0] : pages[1]
+    }
+
+    func spotsInBounds(_ query: SpotMapQuery) async throws -> SpotMap { SpotMap(items: [], truncated: false) }
+    func spot(id: String) async throws -> Spot { throw SpotsServiceError.notFound }
+}
