@@ -18,4 +18,4 @@ Swift 6(strict concurrency), SwiftUI, iOS 17+, XcodeGen(`project.yml`만 수정,
 - 빌드 산출물은 `-derivedDataPath`를 스크래치 폴더로 두고 끝나면 지운다(디스크 제한).
 
 ## 작업 흐름
-`git checkout main && git pull` → `feat/<이름>` → 구현·테스트 → `make check` → 커밋(한국어 conventional) → PR(`Closes #n`, 스크린샷 경로 포함) → `reviewer`·`qa`가 확인할 수 있게 보고.
+`git checkout develop && git pull` → `feat/<이름>` → 구현·테스트 → `make check` → 커밋(한국어 conventional) → PR(`Closes #n`, 스크린샷 경로 포함) → `reviewer`·`qa`가 확인할 수 있게 보고.

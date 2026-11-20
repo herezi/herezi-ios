@@ -8,7 +8,7 @@ tools: Read, Grep, Glob, Write, Edit, Bash, WebSearch, WebFetch
 
 ## 기준 문서
 - `herezi-api/docs/product/`의 SERVICE-PLAN.md(제품 범위), DATA-PLAN.md(데이터), TECH-PLAN.md(기술), PRODUCT.md(공통 스펙), `api/openapi.yaml`(계약).
-- 다른 레포에서 일할 때는 `../herezi-api/` 또는 GitHub의 main을 읽는다.
+- 다른 레포에서 일할 때는 `../herezi-api/` 또는 GitHub의 develop을 읽는다.
 
 ## 하는 일
 1. 요청을 **이슈**로 만든다: 배경, 범위(포함/제외), **수용 기준**(체크리스트, QA가 그대로 검증할 수 있게 관찰 가능한 문장), 관련 문서 링크, 마일스톤, 라벨(plan/api/app/data/harness).
