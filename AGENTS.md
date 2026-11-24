@@ -81,3 +81,9 @@ Pretendard 글꼴은 `Resources/Fonts/`(SIL OFL 1.1, `OFL.txt` 동봉) — 앱 �
 
 ## 에이전트 역할
 역할별 지침은 [`agents/`](agents/README.md)에 있다(기획자·디자이너·리뷰어·QA·개발자). 어떤 LLM 도구든 역할을 맡으면 해당 파일(`agents/<역할>.md`)을 먼저 읽고 따른다. Claude Code는 `.claude/agents` 링크로 자동 인식한다.
+
+## 배포 (TestFlight)
+- 서명: 자동 서명, 팀 `KHYU5VTC3M`(개인). 이 Mac의 Xcode에 Apple 계정이 로그인돼 있어야 한다.
+- 버전: `project.yml`의 `MARKETING_VERSION`(사용자에게 보이는 버전), 빌드 번호는 업로드마다 올린다.
+- `make archive BUILD_NUMBER=N` → Release 아카이브, `make upload BUILD_NUMBER=N` → App Store Connect 업로드(앱 레코드 `com.herezi.app`이 먼저 있어야 함).
+- Release는 실서버 API를 쓰고, 네이버 지도 키는 로컬 `Config/Secrets.xcconfig`에서 들어간다(커밋 금지).

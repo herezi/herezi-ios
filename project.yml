@@ -32,6 +32,11 @@ settings:
     DEAD_CODE_STRIPPING: "YES"
     TARGETED_DEVICE_FAMILY: "1"
     CODE_SIGN_STYLE: Automatic
+    # Apple 개인 개발팀 (비밀값 아님). 자동 서명.
+    DEVELOPMENT_TEAM: KHYU5VTC3M
+    # 버전: 마케팅 버전은 여기서, 빌드 번호는 make upload BUILD_NUMBER=N 으로 덮어쓴다.
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
   configs:
     Debug:
       HEREZI_API_BASE_URL: "http://localhost:8080"
@@ -164,8 +169,10 @@ targets:
       path: Sources/App/Info.plist
       properties:
         CFBundleDisplayName: Herezi
-        CFBundleShortVersionString: "0.1.0"
-        CFBundleVersion: "1"
+        # 세로 전용 iPhone 앱. 멀티태스킹 회전 요구 경고를 없앤다.
+        UIRequiresFullScreen: true
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         UILaunchScreen: {}
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
         NSLocationWhenInUseUsageDescription: 지금 내 주변의 축제·공연·전시를 보여드리기 위해 위치를 사용해요.
