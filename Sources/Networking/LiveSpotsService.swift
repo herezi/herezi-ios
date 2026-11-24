@@ -19,10 +19,11 @@ public struct LiveSpotsService: SpotsService {
     }
 
     public func spot(id: String) async throws -> Spot {
-        let escaped = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        // ID는 여기서 한 번만 인코딩한다. APIClient는 path를 다시 인코딩하지 않는다(#25).
+        let segment = APIClient.pathSegment(id)
         let dto: SpotDTO
         do {
-            dto = try await client.get(SpotDTO.self, path: "/v1/spots/\(escaped)")
+            dto = try await client.get(SpotDTO.self, path: "/v1/spots/\(segment)")
         } catch APIError.server(status: 404, _, _) {
             throw SpotsServiceError.notFound
         }

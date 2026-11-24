@@ -143,3 +143,51 @@ struct LiveSpotsServiceQueryTests {
         #expect(url.absoluteString == "https://api.example.com/v1/spots?lat=1")
     }
 }
+
+/// 요청 URL만 기록하고 404를 돌려주는 URLProtocol.
+private final class RecordingURLProtocol: URLProtocol {
+    private static let lock = NSLock()
+    nonisolated(unsafe) private static var urls: [URL] = []
+
+    static var lastURL: URL? { lock.withLock { urls.last } }
+
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+    override func startLoading() {
+        if let url = request.url { Self.lock.withLock { Self.urls.append(url) } }
+        let response = HTTPURLResponse(url: request.url!, statusCode: 404, httpVersion: nil, headerFields: nil)!
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: Data())
+        client?.urlProtocolDidFinishLoading(self)
+    }
+
+    override func stopLoading() {}
+}
+
+/// #25: 상세 요청의 스팟 ID는 정확히 한 번만 인코딩된다 (`%253A` 같은 이중 인코딩 금지).
+@Suite(.serialized)
+struct SpotDetailPathTests {
+    private func requestedURL(id: String, base: String = "http://localhost:8080") async throws -> URL {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [RecordingURLProtocol.self]
+        let client = APIClient(
+            baseURL: try #require(URL(string: base)), session: URLSession(configuration: configuration))
+        await #expect(throws: SpotsServiceError.notFound) {
+            _ = try await LiveSpotsService(client: client).spot(id: id)
+        }
+        return try #require(RecordingURLProtocol.lastURL)
+    }
+
+    @Test func 콜론이_있는_ID를_한_번만_인코딩한다() async throws {
+        let url = try await requestedURL(id: "seoul_culture:159334")
+        let path = try #require(URLComponents(url: url, resolvingAgainstBaseURL: false)?.percentEncodedPath)
+        #expect(path == "/v1/spots/seoul_culture:159334" || path == "/v1/spots/seoul_culture%3A159334")
+        #expect(!url.absoluteString.contains("%25"))
+    }
+
+    @Test func 슬래시와_퍼센트는_세그먼트_안으로_인코딩한다() async throws {
+        let url = try await requestedURL(id: "a/b%c 한", base: "https://api.example.com/base/")
+        #expect(url.absoluteString == "https://api.example.com/base/v1/spots/a%2Fb%25c%20%ED%95%9C")
+    }
+}

@@ -28,11 +28,15 @@ public struct APIClient: Sendable {
         return url
     }
 
+    /// `path`는 이미 퍼센트 인코딩된 경로다. 경로 안의 값(스팟 ID 등)은 `pathSegment(_:)`로 한 번만 인코딩해서 넣는다.
+    /// (`URLComponents.path`에 넣으면 `%`를 다시 `%25`로 바꿔 이중 인코딩된다 — #25)
     func makeURL(path: String, query: [URLQueryItem] = []) throws -> URL {
         guard var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else {
             throw APIError.invalidURL
         }
-        components.path = components.path.trimmingSuffix("/") + path
+        let encodedPath = components.percentEncodedPath.trimmingSuffix("/") + path
+        guard URLComponents(string: encodedPath) != nil else { throw APIError.invalidURL }
+        components.percentEncodedPath = encodedPath
         components.queryItems = query.isEmpty ? nil : query
         guard let url = components.url else { throw APIError.invalidURL }
         return url
@@ -58,6 +62,18 @@ public struct APIClient: Sendable {
         } catch {
             throw APIError.decoding(String(describing: error))
         }
+    }
+}
+
+extension APIClient {
+    /// 경로 세그먼트 하나에 허용되는 문자(RFC 3986 pchar). `/`·`?`·`#`·`%` 등은 인코딩된다.
+    static let pathSegmentAllowed = CharacterSet.alphanumerics.intersection(
+        CharacterSet(charactersIn: Unicode.Scalar(0)..<Unicode.Scalar(128))
+    ).union(CharacterSet(charactersIn: "-._~!$&'()*+,;=:@"))
+
+    /// 경로 세그먼트 값을 정확히 한 번 퍼센트 인코딩한다. 예: `seoul_culture:159334` → 그대로, `a/b` → `a%2Fb`.
+    static func pathSegment(_ value: String) -> String {
+        value.addingPercentEncoding(withAllowedCharacters: pathSegmentAllowed) ?? value
     }
 }
 
