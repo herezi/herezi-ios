@@ -168,7 +168,8 @@ targets:
     info:
       path: Sources/App/Info.plist
       properties:
-        CFBundleDisplayName: Herezi
+        # 홈 화면에 보이는 이름
+        CFBundleDisplayName: 히어지
         # 세로 전용 iPhone 앱. 멀티태스킹 회전 요구 경고를 없앤다.
         UIRequiresFullScreen: true
         CFBundleShortVersionString: $(MARKETING_VERSION)
@@ -193,6 +194,8 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.herezi.app
         PRODUCT_NAME: Herezi
         ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS: "YES"
+        # 앱 아이콘: Sources/App/Assets.xcassets/AppIcon (두리번 로고, 1024 단일 크기)
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
 
   HereziTests:
     type: bundle.unit-test
