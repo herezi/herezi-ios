@@ -38,8 +38,8 @@ settings:
       # 서버 배포 전이라 Debug는 샘플 데이터(FakeSpotsService)가 기본. 스킴 환경 변수 HEREZI_FAKE_API=0으로 끌 수 있다.
       HEREZI_USE_FAKE_API: "YES"
     Release:
-      # TODO(tech-debt): production API host is not decided yet.
-      HEREZI_API_BASE_URL: "http://localhost:8080"
+      # 실서버 API (Railway, herezi-api docs/ops/railway.md). 도메인 구매 후 api.herezi.com 으로 교체.
+      HEREZI_API_BASE_URL: "https://api-production-4ebcf3e2.up.railway.app"
       HEREZI_USE_FAKE_API: "NO"
 
 targetTemplates:

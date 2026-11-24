@@ -127,8 +127,10 @@ public enum SpotFormatting {
         switch source {
         case "tourapi": "한국관광공사"
         case "kopis": "KOPIS 공연예술통합전산망"
-        case "seoul_culture": "서울 열린데이터광장"
-        default: source
+        case "seoul_culture": "서울문화포털"
+        case "seoul_reservation": "서울시 공공서비스예약"
+        case "cultureinfo": "문화포털"
+        default: "공공데이터"  // 내부 소스 코드를 그대로 보여 주지 않는다.
         }
     }
 
