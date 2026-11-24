@@ -10,7 +10,10 @@ SWIFT_FORMAT := $(shell xcrun --find swift-format 2>/dev/null)
 XCODEBUILD   := xcodebuild -project $(PROJECT) -scheme $(SCHEME) -derivedDataPath $(DERIVED_DATA) \
                 -destination '$(DESTINATION)' CODE_SIGNING_ALLOWED=NO
 
-.PHONY: help generate sync-api lint format verify-static build verify-bundle test check clean
+ARCHIVE_PATH ?= build/Herezi.xcarchive
+BUILD_NUMBER ?= 1
+
+.PHONY: archive upload help generate sync-api lint format verify-static build verify-bundle test check clean
 
 help: ## 명령 목록
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  make %-14s %s\n", $$1, $$2}'
@@ -55,3 +58,11 @@ check: lint verify-static test ## PR 전에 반드시 통과해야 하는 전체
 
 clean: ## 생성물 삭제
 	rm -rf $(PROJECT) $(DERIVED_DATA) Sources/App/Info.plist
+
+archive: generate ## Release 아카이브 (자동 서명, Apple 계정이 Xcode에 로그인돼 있어야 함). BUILD_NUMBER=N
+	xcodebuild -project $(PROJECT) -scheme $(SCHEME) -configuration Release -destination 'generic/platform=iOS' \
+		-archivePath $(ARCHIVE_PATH) -allowProvisioningUpdates CURRENT_PROJECT_VERSION=$(BUILD_NUMBER) archive -quiet
+
+upload: archive ## 아카이브를 App Store Connect(TestFlight)로 업로드. 앱 레코드가 먼저 있어야 함
+	xcodebuild -exportArchive -archivePath $(ARCHIVE_PATH) -exportOptionsPlist ExportOptions.plist \
+		-exportPath build/export -allowProvisioningUpdates
