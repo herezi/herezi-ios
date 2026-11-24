@@ -113,7 +113,10 @@ struct DetailFormattingTests {
     @Test func 종료_안내와_출처_이름() {
         #expect(SpotFormatting.endedNotice(end: kst(2026, 11, 17, 18)) == "11월 17일에 끝난 볼거리예요.")
         #expect(SpotFormatting.sourceName("kopis") == "KOPIS 공연예술통합전산망")
-        #expect(SpotFormatting.sourceName("news") == "news")
+        #expect(SpotFormatting.sourceName("news") == "공공데이터")
+        #expect(SpotFormatting.sourceName("seoul_culture") == "서울문화포털")
+        #expect(SpotFormatting.sourceName("seoul_reservation") == "서울시 공공서비스예약")
+        #expect(SpotFormatting.sourceName("cultureinfo") == "문화포털")
     }
 
     @Test func 멀면_대중교통_길찾기와_웹_대체_링크() {
