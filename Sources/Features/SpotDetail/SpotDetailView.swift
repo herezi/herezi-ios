@@ -105,8 +105,8 @@ public struct SpotDetailView: View {
                         .padding(.horizontal, HZSpace.screen)
                         .padding(.top, HZSpace.s6)
                     reportButton
-                        .frame(maxWidth: .infinity)
-                        .padding(.top, HZSpace.s4)
+                        .padding(.horizontal, HZSpace.screen)
+                        .padding(.top, HZSpace.s3)
                         .padding(.bottom, HZSpace.s6)
                 }
             }
@@ -200,14 +200,40 @@ public struct SpotDetailView: View {
         .background(Color.hz.bgSecondary, in: RoundedRectangle(cornerRadius: HZRadius.md))
     }
 
+    /// 오류 제보 행: 아이콘 + 제목 + 설명 + 화살표. 글자 버튼만으로는 신고 기능으로 보이지 않아서 행 형태로 둔다.
     private var reportButton: some View {
-        Button("정보가 달라요") {
+        Button {
             guard let url = viewModel.reportMailURL else { return }
             openURL(url) { accepted in
                 if !accepted { viewModel.showMailUnavailable() }
             }
+        } label: {
+            HStack(spacing: HZSpace.s3) {
+                Image(systemName: "exclamationmark.bubble")
+                    .font(.system(size: 20, weight: .regular))
+                    .foregroundStyle(Color.hz.textSecondary)
+                    .frame(width: 24)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("정보가 달라요")
+                        .font(Font.hz.bodyStrong)
+                        .foregroundStyle(Color.hz.textPrimary)
+                    Text("기간·장소·요금이 틀렸다면 알려 주세요")
+                        .font(Font.hz.caption)
+                        .foregroundStyle(Color.hz.textSecondary)
+                }
+                Spacer(minLength: HZSpace.s2)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Color.hz.iconSecondary)
+            }
+            .padding(HZSpace.s4)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .overlay(RoundedRectangle(cornerRadius: HZRadius.md).stroke(Color.hz.border, lineWidth: 1))
+            .contentShape(RoundedRectangle(cornerRadius: HZRadius.md))
         }
-        .buttonStyle(HZTextButtonStyle(.caption))
+        .buttonStyle(.plain)
+        .accessibilityLabel("정보가 달라요. 잘못된 정보 신고")
+        .accessibilityHint("메일 앱이 열려요")
     }
 
     private var bottomBar: some View {
