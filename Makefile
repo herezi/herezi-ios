@@ -12,6 +12,9 @@ XCODEBUILD   := xcodebuild -project $(PROJECT) -scheme $(SCHEME) -derivedDataPat
 
 ARCHIVE_PATH ?= build/Herezi.xcarchive
 BUILD_NUMBER ?= 1
+# App Store Connect API 키 (레포 밖). ~/.herezi/asc-api.env 에 ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_PATH
+-include $(HOME)/.herezi/asc-api.env
+ASC_AUTH := $(if $(ASC_KEY_ID),-authenticationKeyPath $(ASC_KEY_PATH) -authenticationKeyID $(ASC_KEY_ID) -authenticationKeyIssuerID $(ASC_ISSUER_ID),)
 
 .PHONY: archive upload help generate sync-api lint format verify-static build verify-bundle test check clean
 
@@ -61,8 +64,8 @@ clean: ## 생성물 삭제
 
 archive: generate ## Release 아카이브 (자동 서명, Apple 계정이 Xcode에 로그인돼 있어야 함). BUILD_NUMBER=N
 	xcodebuild -project $(PROJECT) -scheme $(SCHEME) -configuration Release -destination 'generic/platform=iOS' \
-		-archivePath $(ARCHIVE_PATH) -allowProvisioningUpdates CURRENT_PROJECT_VERSION=$(BUILD_NUMBER) archive -quiet
+		-archivePath $(ARCHIVE_PATH) -allowProvisioningUpdates $(ASC_AUTH) CURRENT_PROJECT_VERSION=$(BUILD_NUMBER) archive -quiet
 
 upload: archive ## 아카이브를 App Store Connect(TestFlight)로 업로드. 앱 레코드가 먼저 있어야 함
 	xcodebuild -exportArchive -archivePath $(ARCHIVE_PATH) -exportOptionsPlist ExportOptions.plist \
-		-exportPath build/export -allowProvisioningUpdates
+		-exportPath build/export -allowProvisioningUpdates $(ASC_AUTH)
