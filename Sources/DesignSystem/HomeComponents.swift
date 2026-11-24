@@ -87,72 +87,96 @@ public struct HeroCard: View {
     let meta: String
     let isSaved: Bool
     let onToggleSave: () -> Void
+    /// 테스트에서 사진(불러오기 성공 상태)을 직접 넣을 때만 쓴다. nil이면 `SpotImage`.
+    let mediaOverride: AnyView?
 
     public init(spot: Spot, badge: String?, meta: String, isSaved: Bool, onToggleSave: @escaping () -> Void) {
+        self.init(spot: spot, badge: badge, meta: meta, isSaved: isSaved, onToggleSave: onToggleSave, media: nil)
+    }
+
+    init(
+        spot: Spot, badge: String?, meta: String, isSaved: Bool, onToggleSave: @escaping () -> Void,
+        media: AnyView?
+    ) {
         self.spot = spot
         self.badge = badge
         self.meta = meta
         self.isSaved = isSaved
         self.onToggleSave = onToggleSave
+        self.mediaOverride = media
+    }
+
+    @ViewBuilder private var media: some View {
+        if let mediaOverride {
+            mediaOverride
+        } else {
+            SpotImage(spot: spot, fallback: .poster(.init(showsTitle: false, showsLabel: false, topInset: 44)))
+        }
     }
 
     public var body: some View {
-        ZStack(alignment: .bottomLeading) {
-            SpotImage(spot: spot, fallback: .poster(.init(showsTitle: false, showsLabel: false, topInset: 44)))
-            LinearGradient(
-                stops: [
-                    .init(color: Color.hz.ink.opacity(0), location: 0.3),
-                    .init(color: Color.hz.ink.opacity(0.6), location: 0.6),
-                    .init(color: Color.hz.ink.opacity(0.85), location: 1),
-                ], startPoint: .top, endPoint: .bottom
-            )
-            .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: HZSpace.s1) {
-                Text(spot.title)
-                    .hzText(.title1)
-                    .foregroundStyle(.white)
-                    .lineLimit(2)
-                Text(meta)
-                    .font(Font.hz.caption.monospacedDigit())
-                    .foregroundStyle(.white.opacity(0.92))
-                    .lineLimit(2)
+        // 카드 크기는 7:4 틀(Color.clear)이 정하고, 사진은 background로 깐다.
+        // scaledToFill 사진을 ZStack에 직접 넣으면 사진 크기만큼 ZStack이 커져서
+        // 아래쪽 그라데이션·제목·메타가 잘린 영역 밖으로 밀려난다(#23).
+        Color.clear
+            .frame(maxWidth: .infinity, minHeight: 200)
+            .aspectRatio(7 / 4, contentMode: .fit)
+            .background { media }
+            .overlay {
+                LinearGradient(
+                    stops: [
+                        .init(color: Color.hz.ink.opacity(0), location: 0.3),
+                        .init(color: Color.hz.ink.opacity(0.6), location: 0.6),
+                        .init(color: Color.hz.ink.opacity(0.85), location: 1),
+                    ], startPoint: .top, endPoint: .bottom
+                )
+                .accessibilityHidden(true)
             }
-            .padding(HZSpace.s4)
-        }
-        .overlay(alignment: .topLeading) {
-            if let badge {
-                Text(badge)
-                    .font(HZTextStyle.caption.font(weight: .bold))
-                    .foregroundStyle(Color.hz.textPrimary)
-                    .padding(.horizontal, 10)
-                    .frame(height: 26)
-                    .background(.white, in: Capsule())
-                    .padding(HZSpace.s3)
+            .overlay(alignment: .bottomLeading) {
+                VStack(alignment: .leading, spacing: HZSpace.s1) {
+                    Text(spot.title)
+                        .hzText(.title1)
+                        .foregroundStyle(.white)
+                        .lineLimit(2)
+                    Text(meta)
+                        .font(Font.hz.caption.monospacedDigit())
+                        .foregroundStyle(.white.opacity(0.92))
+                        .lineLimit(2)
+                }
+                .padding(HZSpace.s4)
             }
-        }
-        .frame(maxWidth: .infinity, minHeight: 200)
-        .aspectRatio(7 / 4, contentMode: .fit)
-        .clipShape(RoundedRectangle(cornerRadius: HZRadius.lg))
-        .contentShape(RoundedRectangle(cornerRadius: HZRadius.lg))
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel([spot.title, badge, meta].compactMap { $0 }.joined(separator: ", "))
-        .accessibilityAddTraits(.isButton)
-        // 저장 버튼은 카드 탭과 겹치지 않게 따로 (터치 44).
-        .overlay(alignment: .topTrailing) {
-            Button(action: onToggleSave) {
-                Image(systemName: isSaved ? "bookmark.fill" : "bookmark")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(Color.hz.iconPrimary)
-                    .frame(width: 36, height: 36)
-                    .background(Circle().fill(.white.opacity(0.9)))
-                    .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
+            .overlay(alignment: .topLeading) {
+                if let badge {
+                    Text(badge)
+                        .font(HZTextStyle.caption.font(weight: .bold))
+                        .foregroundStyle(Color.hz.textPrimary)
+                        .padding(.horizontal, 10)
+                        .frame(height: 26)
+                        .background(.white, in: Capsule())
+                        .padding(HZSpace.s3)
+                }
             }
-            .buttonStyle(.plain)
-            .sensoryFeedback(.selection, trigger: isSaved)
-            .accessibilityLabel(isSaved ? "저장 취소" : "저장")
-            .padding(HZSpace.s1)
-        }
+            .clipShape(RoundedRectangle(cornerRadius: HZRadius.lg))
+            .contentShape(RoundedRectangle(cornerRadius: HZRadius.lg))
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel([spot.title, badge, meta].compactMap { $0 }.joined(separator: ", "))
+            .accessibilityAddTraits(.isButton)
+            // 저장 버튼은 카드 탭과 겹치지 않게 따로 (터치 44).
+            .overlay(alignment: .topTrailing) {
+                Button(action: onToggleSave) {
+                    Image(systemName: isSaved ? "bookmark.fill" : "bookmark")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(Color.hz.iconPrimary)
+                        .frame(width: 36, height: 36)
+                        .background(Circle().fill(.white.opacity(0.9)))
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .sensoryFeedback(.selection, trigger: isSaved)
+                .accessibilityLabel(isSaved ? "저장 취소" : "저장")
+                .padding(HZSpace.s1)
+            }
     }
 }
 
