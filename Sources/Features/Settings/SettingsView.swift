@@ -35,6 +35,8 @@ public struct SettingsView: View {
                     .accessibilityHint("설정 앱이 열려요")
                 }
                 group("정보") {
+                    SettingsRow(title: "공지사항", chevron: true) { browser = BrowserLink(SettingsViewModel.noticesURL) }
+                        .accessibilityHint("브라우저가 열려요")
                     SettingsRow(title: "정보 출처", chevron: true) { showsSources = true }
                     SettingsRow(title: "이용약관", chevron: true) { browser = BrowserLink(SettingsViewModel.termsURL) }
                         .accessibilityHint("브라우저가 열려요")

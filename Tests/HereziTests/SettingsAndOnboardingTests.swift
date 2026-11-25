@@ -42,6 +42,7 @@ struct SettingsViewModelTests {
     }
 
     @Test func 약관_링크와_오픈소스_라이선스() {
+        #expect(SettingsViewModel.noticesURL.absoluteString == "https://herezi.github.io/notices/")
         #expect(SettingsViewModel.termsURL.absoluteString == "https://herezi.github.io/terms/")
         #expect(SettingsViewModel.privacyURL.absoluteString == "https://herezi.github.io/privacy/")
         let pretendard = SettingsViewModel.openSourceLicenses.first { $0.name == "Pretendard" }
