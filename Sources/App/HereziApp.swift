@@ -74,8 +74,8 @@ final class AppModel {
         library = SavedLibrary(auth: auth, account: accountService, legacy: SavedSpotsStore())
         kakao = AppEnvironment.makeKakaoLogin()
         account = AccountActions(library: library, account: accountService, kakao: kakao)
-        // 서버 역지오코딩(구·동) → 실패·빈 값이면 OS 지오코더.
-        naming = ServerPlaceNaming(service: service, fallback: GeocoderPlaceNaming())
+        // 위치명은 기기 지오코더만 쓴다 — 좌표를 서버로 보내지 않는다(#37).
+        naming = GeocoderPlaceNaming()
         home = HomeViewModel(service: service, location: location, naming: naming, saved: library)
         // 스크린리더가 켜져 있으면 시트를 펼친 채 시작한다(목록이 지도의 대안, S2 접근성).
         map = MapViewModel(
@@ -286,11 +286,24 @@ enum AppEnvironment {
         return (bundle.object(forInfoDictionaryKey: "HereziUseFakeAPI") as? String) == "YES"
     }
 
+    /// API 주소. 스킴 환경 변수 `HEREZI_API_BASE_URL`이 있으면 그것(시뮬레이터에서 실서버로 확인할 때),
+    /// 없으면 Info.plist `HereziAPIBaseURL`(project.yml 빌드 설정별).
+    static func apiBaseURL(environment: [String: String] = ProcessInfo.processInfo.environment) -> URL {
+        if let raw = environment["HEREZI_API_BASE_URL"], let url = URL(string: raw), url.scheme != nil {
+            return url
+        }
+        return APIClient.baseURL()
+    }
+
+    /// 근처·지도·검색은 지역 데이터 파일(Caches에 저장) + 기기 계산, 상세만 `GET /v1/spots/{id}` (#37).
     static func makeSpotsService() -> any SpotsService {
         if usesFakeAPI() {
             return FakeSpotsService(spots: SampleSpots.demo)
         }
-        return LiveSpotsService(client: APIClient(baseURL: APIClient.baseURL()))
+        let client = APIClient(baseURL: apiBaseURL())
+        let repository = RegionSpotsRepository(
+            region: "seoul", fetcher: LiveRegionSpotsSource(client: client), cache: .appCaches())
+        return LocalSpotsService(repository: repository, detail: LiveSpotDetailService(client: client))
     }
 
     /// Debug `-HZFakeAuth kakao|apple|none`: 가짜 세션(서버·SDK 없이)으로 시작 — 스크린샷·UI 테스트용.
@@ -327,7 +340,7 @@ enum AppEnvironment {
                 return FakeAccountService(spots: SampleSpots.demo)
             #endif
         }
-        return LiveAccountService(client: APIClient(baseURL: APIClient.baseURL()))
+        return LiveAccountService(client: APIClient(baseURL: apiBaseURL()))
     }
 
     /// 카카오 키가 없거나 가짜 인증이면 가짜 카카오 로그인(샘플 모드 개발용).

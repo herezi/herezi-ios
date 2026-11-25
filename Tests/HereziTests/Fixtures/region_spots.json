@@ -1,0 +1,62 @@
+{
+  "region": "seoul",
+  "generated_at": "2026-11-25T01:00:43.722049638Z",
+  "count": 4,
+  "items": [
+    {
+      "id": "cultureinfo:204025",
+      "title": "늘근도둑이야기",
+      "summary": "아트포레스트 1관에서 연극을 관람할 수 있어요.",
+      "category": "performance",
+      "lat": 37.58248538026813,
+      "lng": 127.00309074973019,
+      "place_name": "아트포레스트 1관",
+      "starts_at": "2022-03-04T15:00:00Z",
+      "ends_at": "2026-12-31T14:59:59Z",
+      "image_url": "https://www.culture.go.kr/upload/rdf/25/09/show.jpg",
+      "source": "cultureinfo",
+      "fetched_at": "2026-11-24T20:03:05.897526Z",
+      "is_ended": false
+    },
+    {
+      "id": "tourapi:2771234",
+      "title": "서울빛초롱축제",
+      "category": "festival",
+      "lat": 37.5690,
+      "lng": 126.9784,
+      "address": "서울 중구 청계천로 1",
+      "place_name": "청계광장",
+      "starts_at": "2026-11-14T18:00:00+09:00",
+      "ends_at": "2026-12-14T22:00:00+09:00",
+      "is_free": true,
+      "source": "tourapi",
+      "source_url": "https://korean.visitkorea.or.kr/",
+      "fetched_at": "2026-11-20T09:30:00+09:00",
+      "is_ended": false
+    },
+    {
+      "id": "seoul_culture:1",
+      "title": "가을 국화 전시회",
+      "category": "nature",
+      "lat": 37.5663,
+      "lng": 126.9779,
+      "starts_at": "2026-10-01T00:00:00Z",
+      "ends_at": "2026-10-20T14:59:59Z",
+      "is_free": false,
+      "source": "seoul_culture",
+      "fetched_at": "2026-11-20T03:00:00Z",
+      "is_ended": true
+    },
+    {
+      "id": "future:1",
+      "title": "앱이 아직 모르는 카테고리",
+      "category": "some_future_category",
+      "lat": 37.5,
+      "lng": 127.0,
+      "starts_at": "2026-11-20T00:00:00Z",
+      "source": "x",
+      "fetched_at": "2026-11-20T00:00:00Z",
+      "is_ended": false
+    }
+  ]
+}

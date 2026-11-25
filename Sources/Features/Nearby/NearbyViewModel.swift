@@ -167,6 +167,13 @@ public final class NearbyViewModel: SpotFilterControlling {
         await reload()
     }
 
+    /// 당겨서 새로고침: 지역 파일을 확인(`If-None-Match`)한 뒤 기기 데이터로 다시 계산한다.
+    /// 확인에 실패해도 기기 데이터로 그린다(데이터가 아예 없으면 `reload`가 오류 상태를 보인다).
+    public func refresh() async {
+        _ = try? await service.refreshData(force: true)
+        await reload()
+    }
+
     /// Resolves location once, then fetches spots for the current filters.
     public func reload() async {
         state = .loading

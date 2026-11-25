@@ -1,21 +1,41 @@
 import Domain
 import Foundation
 
-/// `SpotsService` backed by the real Herezi API (`GET /v1/spots`, `GET /v1/spots/map`, `GET /v1/spots/{id}`,
-/// `GET /v1/geo/reverse`).
-public struct LiveSpotsService: SpotsService {
+// 서버에서 볼거리를 받아 오는 어댑터. 사용자 좌표를 담는 요청은 없다(herezi-api ADR 0004, 이슈 #37):
+// 근처·지도·검색은 지역 데이터 파일로 기기에서 계산하고(`LocalSpotsService`), 위치명은 기기 지오코더로 만든다.
+// 폐기 예고된 `/v1/spots`(근처)·`/v1/spots/map`·`/v1/geo/reverse`는 부르지 않는다 — scripts/check-api-drift.sh가 검사한다.
+
+/// `GET /v1/regions/{region}/spots` — 지역 데이터 파일(ETag·304, gzip).
+public struct LiveRegionSpotsSource: RegionSpotsFetching {
     private let client: APIClient
 
     public init(client: APIClient) {
         self.client = client
     }
 
-    public func spots(_ query: SpotQuery) async throws -> SpotPage {
-        try await client.get(SpotPageDTO.self, path: "/v1/spots", query: Self.queryItems(for: query)).toDomain()
+    public func fetchRegion(_ region: String, ifNoneMatch etag: String?) async throws -> RegionFetchResult {
+        let segment = APIClient.pathSegment(region)
+        let (data, response) = try await client.conditionalGet(
+            path: "/v1/regions/\(segment)/spots", ifNoneMatch: etag)
+        if response.statusCode == 304 { return .notModified }
+        return .updated(data: data, etag: response.value(forHTTPHeaderField: "ETag"))
     }
 
-    public func spotsInBounds(_ query: SpotMapQuery) async throws -> SpotMap {
-        try await client.get(SpotMapDTO.self, path: "/v1/spots/map", query: Self.queryItems(for: query)).toDomain()
+    public func decodeRegion(_ data: Data) throws -> RegionSnapshot {
+        do {
+            return try JSONDecoder.herezi.decode(RegionSpotsDTO.self, from: data).toDomain()
+        } catch {
+            throw APIError.decoding(String(describing: error))
+        }
+    }
+}
+
+/// `GET /v1/spots/{id}` — 상세(좌표를 보내지 않음). 지역 데이터에 없는 항목(저장했지만 오래 지난 항목 등)에 쓴다.
+public struct LiveSpotDetailService: SpotDetailFetching {
+    private let client: APIClient
+
+    public init(client: APIClient) {
+        self.client = client
     }
 
     public func spot(id: String) async throws -> Spot {
@@ -31,58 +51,5 @@ public struct LiveSpotsService: SpotsService {
             throw APIError.decoding("Unknown category \(dto.category)")
         }
         return spot
-    }
-
-    public func reverseGeocode(_ coordinate: Coordinate) async throws -> String {
-        try await client.get(
-            GeoReverseDTO.self, path: "/v1/geo/reverse",
-            query: [
-                URLQueryItem(name: "lat", value: String(coordinate.latitude)),
-                URLQueryItem(name: "lng", value: String(coordinate.longitude)),
-            ]
-        ).label
-    }
-
-    static func queryItems(for query: SpotQuery) -> [URLQueryItem] {
-        var items = [
-            URLQueryItem(name: "lat", value: String(query.coordinate.latitude)),
-            URLQueryItem(name: "lng", value: String(query.coordinate.longitude)),
-            URLQueryItem(name: "radius_m", value: String(query.radiusMeters)),
-            URLQueryItem(name: "when", value: query.when.rawValue),
-            URLQueryItem(name: "limit", value: String(query.limit)),
-        ]
-        if !query.categories.isEmpty {
-            let joined = query.categories.map(\.rawValue).sorted().joined(separator: ",")
-            items.append(URLQueryItem(name: "category", value: joined))
-        }
-        if query.freeOnly {
-            items.append(URLQueryItem(name: "free", value: "true"))
-        }
-        if let keyword = query.normalizedKeyword {
-            items.append(URLQueryItem(name: "q", value: keyword))
-        }
-        if let cursor = query.cursor {
-            items.append(URLQueryItem(name: "cursor", value: cursor))
-        }
-        return items
-    }
-
-    static func queryItems(for query: SpotMapQuery) -> [URLQueryItem] {
-        var items = [
-            URLQueryItem(name: "sw_lat", value: String(query.bounds.southWest.latitude)),
-            URLQueryItem(name: "sw_lng", value: String(query.bounds.southWest.longitude)),
-            URLQueryItem(name: "ne_lat", value: String(query.bounds.northEast.latitude)),
-            URLQueryItem(name: "ne_lng", value: String(query.bounds.northEast.longitude)),
-            URLQueryItem(name: "when", value: query.when.rawValue),
-            URLQueryItem(name: "limit", value: String(query.limit)),
-        ]
-        if !query.categories.isEmpty {
-            let joined = query.categories.map(\.rawValue).sorted().joined(separator: ",")
-            items.append(URLQueryItem(name: "category", value: joined))
-        }
-        if query.freeOnly {
-            items.append(URLQueryItem(name: "free", value: "true"))
-        }
-        return items
     }
 }

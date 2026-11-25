@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # api/openapi.yaml(계약)과 Swift 코드가 어긋나지 않았는지 검사한다.
 #  1) components.schemas.Category enum == SpotCategory case 목록
-#  2) components.schemas.{Spot,SpotPage,SpotMap,GeoReverse,SavedImportRequest,SavedImportResult} properties
+#  2) components.schemas.{Spot,SpotPage,RegionSpot,RegionSpots,SavedImportRequest,SavedImportResult} properties
 #     == 각 DTO CodingKeys 의 JSON 이름
-#  3) 계약의 paths 를 Networking(LiveSpotsService·LiveAccountService)이 모두 부르는지 (경로 변수 이름은 무시)
+#  3) 계약의 /v1 paths 중 deprecated 가 아닌 것을 Networking(Sources/Networking/*.swift)이 모두 부르는지 (경로 변수 이름은 무시)
+#  4) deprecated 경로(좌표를 받는 /v1/spots 근처·/v1/spots/map·/v1/geo/reverse — herezi-api ADR 0004)는 일부러 부르지 않는다.
+#     Networking에 남아 있으면 실패한다 (앱은 사용자 좌표를 서버로 보내지 않는다, 이슈 #37).
 # 계약을 바꾸려면 herezi-api에서 먼저 바꾸고 `make sync-api` 후 코드를 맞춘다.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -53,7 +55,7 @@ dto_keys() {
   ' Sources/Networking/DTOs.swift | sort
 }
 
-for pair in Spot:SpotDTO SpotPage:SpotPageDTO SpotMap:SpotMapDTO GeoReverse:GeoReverseDTO \
+for pair in Spot:SpotDTO SpotPage:SpotPageDTO RegionSpot:RegionSpotDTO RegionSpots:RegionSpotsDTO \
   SavedImportRequest:SavedImportRequestDTO SavedImportResult:SavedImportResultDTO; do
   schema=${pair%%:*}
   dto=${pair##*:}
@@ -69,16 +71,33 @@ for pair in Spot:SpotDTO SpotPage:SpotPageDTO SpotMap:SpotMapDTO GeoReverse:GeoR
   fi
 done
 
-# --- 경로: 계약의 /v1 paths ⊆ Networking이 부르는 경로 (경로 변수는 {}로 맞춘다) ----------------
-spec_paths=$(awk '/^paths:/ { in_paths = 1; next } in_paths && /^[a-z]/ { exit } in_paths && /^  \/v1\// { p = $1; sub(/:$/, "", p); print p }' "$spec" \
-  | sed -E 's/\{[^}]*\}/{}/g' | sort -u)
-swift_paths=$(grep -ohE 'path: "[^"]+"' Sources/Networking/LiveSpotsService.swift Sources/Networking/LiveAccountService.swift \
+# --- 경로: 계약의 /v1 paths(deprecated 제외) ⊆ Networking이 부르는 경로 (경로 변수는 {}로 맞춘다) -------------
+# 출력: "<경로> <deprecated 여부 0|1>"
+spec_path_flags=$(awk '
+  /^paths:/ { in_paths = 1; next }
+  in_paths && /^[a-z]/ { exit }
+  in_paths && /^  \/v1\// { if (p != "") print p, dep; p = $1; sub(/:$/, "", p); dep = 0; next }
+  in_paths && /^  [^ ]/ { if (p != "") print p, dep; p = ""; next }
+  in_paths && p != "" && /^      deprecated: true/ { dep = 1 }
+  END { if (p != "") print p, dep }
+' "$spec" | sed -E 's/\{[^}]*\}/{}/g')
+spec_paths=$(echo "$spec_path_flags" | awk '$2 == 0 { print $1 }' | sort -u)
+deprecated_paths=$(echo "$spec_path_flags" | awk '$2 == 1 { print $1 }' | sort -u)
+swift_paths=$(grep -ohE 'path: "[^"]+"' Sources/Networking/*.swift \
   | sed -E 's/path: "(.*)"/\1/; s/\\\([^)]*\)\)?/{}/g' | sort -u)
 missing=$(comm -23 <(echo "$spec_paths") <(echo "$swift_paths"))
 if [[ -n "$missing" ]]; then
   echo "check-api-drift: Networking이 구현하지 않은 계약 경로:"
   echo "$missing"
   fail=1
+fi
+if [[ -n "$deprecated_paths" ]]; then
+  used=$(comm -12 <(echo "$deprecated_paths") <(echo "$swift_paths"))
+  if [[ -n "$used" ]]; then
+    echo "check-api-drift: 폐기 예고(deprecated) 경로를 Networking이 아직 부릅니다 — 좌표를 서버로 보내지 않는다(#37):"
+    echo "$used"
+    fail=1
+  fi
 fi
 
 if [[ $fail -ne 0 ]]; then

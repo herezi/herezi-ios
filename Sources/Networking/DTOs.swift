@@ -68,10 +68,6 @@ struct SpotPageDTO: Decodable, Sendable {
         case items = "items"
         case nextCursor = "next_cursor"
     }
-
-    func toDomain() -> SpotPage {
-        SpotPage(items: items.compactMap { $0.toDomain() }, nextCursor: nextCursor)
-    }
 }
 
 extension SpotPageDTO {
@@ -85,33 +81,72 @@ extension SpotPageDTO {
     }
 }
 
-/// `components.schemas.SpotMap`
-struct SpotMapDTO: Decodable, Sendable {
-    let items: [SpotDTO]
-    let truncated: Bool
+/// `components.schemas.RegionSpot` — 지역 데이터 파일의 항목(`Spot`에서 `distance_m`·`saved_at`만 없음).
+struct RegionSpotDTO: Decodable, Sendable {
+    let id: String
+    let title: String
+    let summary: String?
+    let category: String
+    let lat: Double
+    let lng: Double
+    let address: String?
+    let placeName: String?
+    let startsAt: Date
+    let endsAt: Date?
+    let isFree: Bool?
+    let imageURL: URL?
+    let source: String
+    let sourceURL: URL?
+    let fetchedAt: Date
+    /// 서버 `generated_at` 기준. 앱은 기기 시각으로 다시 계산한다(`Spot.hasEnded(at:)`).
+    let isEnded: Bool
 
     enum CodingKeys: String, CodingKey {
-        case items = "items"
-        case truncated = "truncated"
+        case id = "id"
+        case title = "title"
+        case summary = "summary"
+        case category = "category"
+        case lat = "lat"
+        case lng = "lng"
+        case address = "address"
+        case placeName = "place_name"
+        case startsAt = "starts_at"
+        case endsAt = "ends_at"
+        case isFree = "is_free"
+        case imageURL = "image_url"
+        case source = "source"
+        case sourceURL = "source_url"
+        case fetchedAt = "fetched_at"
+        case isEnded = "is_ended"
     }
 
-    func toDomain() -> SpotMap {
-        SpotMap(items: items.compactMap { $0.toDomain() }, truncated: truncated)
+    /// 모르는 카테고리는 nil (앞으로 늘어나도 앱이 깨지지 않게).
+    func toDomain() -> Spot? {
+        guard let category = SpotCategory(rawValue: category) else { return nil }
+        return Spot(
+            id: id, title: title, summary: summary, category: category,
+            coordinate: Coordinate(latitude: lat, longitude: lng), address: address, placeName: placeName,
+            startsAt: startsAt, endsAt: endsAt, isFree: isFree, imageURL: imageURL, source: source,
+            sourceURL: sourceURL, fetchedAt: fetchedAt, isEnded: isEnded)
     }
 }
 
-/// `components.schemas.GeoReverse` — 앱은 `label`만 쓴다.
-struct GeoReverseDTO: Decodable, Sendable {
-    let area1: String
-    let area2: String
-    let area3: String
-    let label: String
+/// `components.schemas.RegionSpots` — `GET /v1/regions/{region}/spots` 본문.
+struct RegionSpotsDTO: Decodable, Sendable {
+    let region: String
+    let generatedAt: Date
+    let count: Int
+    let items: [RegionSpotDTO]
 
     enum CodingKeys: String, CodingKey {
-        case area1 = "area1"
-        case area2 = "area2"
-        case area3 = "area3"
-        case label = "label"
+        case region = "region"
+        case generatedAt = "generated_at"
+        case count = "count"
+        case items = "items"
+    }
+
+    func toDomain() -> RegionSnapshot {
+        RegionSnapshot(region: region, generatedAt: generatedAt, spots: items.compactMap { $0.toDomain() })
     }
 }
 

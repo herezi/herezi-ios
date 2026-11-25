@@ -242,10 +242,6 @@ actor FailingSpotsService: SpotsService {
     func spot(id: String) async throws -> Spot {
         try await base.spot(id: id)
     }
-
-    func reverseGeocode(_ coordinate: Coordinate) async throws -> String {
-        try await base.reverseGeocode(coordinate)
-    }
 }
 
 /// 지도 조회의 `limit`을 작게 바꿔 `truncated`를 흉내 낸다.
@@ -265,9 +261,5 @@ struct LimitedSpotsService: SpotsService {
 
     func spot(id: String) async throws -> Spot {
         try await base.spot(id: id)
-    }
-
-    func reverseGeocode(_ coordinate: Coordinate) async throws -> String {
-        try await base.reverseGeocode(coordinate)
     }
 }

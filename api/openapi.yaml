@@ -1,12 +1,16 @@
 openapi: 3.1.0
 info:
   title: Herezi API
-  version: 0.7.0
+  version: 0.8.0
   description: |
     Herezi 공개 API 계약. 이 파일이 서버·iOS·Android 사이의 단일 기준이다.
     변경 시 하위호환을 지키고, 앱 레포는 `make sync-api`로 이 파일을 가져간다.
 
-    인증: 조회 API(`/v1/spots*`, `/v1/geo/reverse`)는 인증 없이 쓴다. `/v1/me/*`만 로그인이 필요하다 —
+    위치 비전송(0.8.0, 이슈 #74): 앱은 사용자 좌표를 서버로 보내지 않는다. 앱은 `GET /v1/regions/{region}/spots`(지역 전체 데이터)를
+    받아 두고 거리·근처 목록·지도·정렬·검색을 기기에서 계산하며, 위치 이름은 기기 지오코더로 만든다.
+    좌표를 받는 `/v1/spots`(근처)·`/v1/spots/map`·`/v1/geo/reverse`는 `deprecated` — 앱 전환 후 제거한다.
+
+    인증: 조회 API(`/v1/regions/*`, `/v1/spots*`, `/v1/geo/reverse`)는 인증 없이 쓴다. `/v1/me/*`만 로그인이 필요하다 —
     앱이 카카오·Apple로 로그인해 받은 **Supabase 세션의 access token**을 `Authorization: Bearer <JWT>`로 보낸다
     (TECH-PLAN.md §4.1). 401이면 세션을 리프레시해 한 번 다시 시도하고, 그래도 401이면 로그아웃 상태로 바꾼다.
     503 `auth_unavailable`은 일시적이므로 로그아웃하지 않는다.
@@ -26,11 +30,55 @@ paths:
                 required: [status]
                 properties:
                   status: { type: string, example: ok }
+  /v1/regions/{region}/spots:
+    get:
+      operationId: listRegionSpots
+      summary: 지역 데이터 파일 — 앱이 받아 두고 근처·지도를 기기에서 계산한다 (좌표를 받지 않음)
+      description: |
+        지역(`region`)의 볼거리 전체를 한 번에 돌려준다. 앱은 사용자 좌표를 서버로 보내지 않고, 이 데이터로 거리 계산·반경·지도 영역·
+        필터(`when`·`category`·`free`)·정렬·키워드 검색을 기기에서 한다(SERVICE-PLAN §12 Q8, 이슈 #74).
+
+        포함: **진행 중이거나 앞으로 90일 안에 시작**하는 항목 + **종료 후 90일 안**의 끝난 항목(저장 목록·상세가 오프라인에서도 보이게).
+        앱은 목록·지도에서 여전히 끝난 항목(`ends_at` < 기기 현재 시각)을 숨긴다. 항목 순서는 `id`순.
+
+        캐시: 강한 `ETag`(본문 내용 해시, gzip 표현은 다른 값)를 저장해 두었다가 `If-None-Match`로 보내면 바뀌지 않았을 때 304(본문 없음).
+        `Cache-Control: public, max-age=3600`. 서버는 최대 10분마다 데이터를 다시 읽고, 내용이 같으면 `ETag`·`generated_at`을 유지한다
+        (수집은 하루 1회). `Accept-Encoding: gzip`이면 `Content-Encoding: gzip`으로 보낸다(앱 HTTP 클라이언트가 자동으로 푼다).
+      parameters:
+        - name: region
+          in: path
+          required: true
+          description: 지역 ID. 지금은 서울만 있다. 모르는 값은 404
+          schema: { type: string, enum: [seoul] }
+        - name: If-None-Match
+          in: header
+          description: 이전 응답의 `ETag`
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          headers:
+            ETag: { description: 강한 검증자(내용 해시), schema: { type: string } }
+            Cache-Control: { schema: { type: string, example: "public, max-age=3600" } }
+            Content-Encoding: { description: "`Accept-Encoding: gzip`일 때 gzip", schema: { type: string } }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RegionSpots" }
+        "304":
+          description: 바뀌지 않음(`If-None-Match`가 현재 `ETag`와 같음). 본문 없음 — 기기에 저장한 데이터를 그대로 쓴다
+        "404":
+          description: 모르는 지역 (code=not_found)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
   /v1/spots:
     get:
       operationId: listSpots
+      deprecated: true
       summary: 위치 기준 근처의 "지금 볼 만한 것" 목록 (키워드 검색 포함)
       description: |
+        앱 전환 후 제거 (#74). 앱은 `/v1/regions/{region}/spots`로 받아 기기에서 계산한다.
+
         `lat`/`lng`는 항상 필수다. 위치 권한이 없으면 앱은 서울시청(37.5663, 126.9779)을 보낸다(검색 포함).
         `q`를 주면 다른 필터와 함께(AND) 키워드로 더 좁힌다. 끝난 항목은 검색 결과에도 나오지 않는다.
         다음 페이지를 받을 때는 `next_cursor`와 함께 같은 파라미터(`q` 포함)를 그대로 보낸다.
@@ -78,8 +126,11 @@ paths:
   /v1/spots/map:
     get:
       operationId: listSpotsInBBox
+      deprecated: true
       summary: 지도 영역(bbox) 안의 항목. 클러스터링은 앱에서 한다
       description: |
+        앱 전환 후 제거 (#74). 앱은 `/v1/regions/{region}/spots`로 받아 기기에서 영역을 고른다.
+
         남서(sw)·북동(ne) 꼭짓점으로 지정한 영역 안의 항목을 영역 중심에서 가까운 순으로 최대 `limit`개 돌려준다.
         더 있으면 `truncated`가 true다(지도를 확대하면 더 보인다). 날짜변경선을 넘는 영역(sw_lng > ne_lng)은 지원하지 않는다.
       parameters:
@@ -131,8 +182,11 @@ paths:
   /v1/geo/reverse:
     get:
       operationId: reverseGeocode
+      deprecated: true
       summary: 좌표 → 행정구역 이름 (앱 상단 위치명, 예 "중구 태평로1가")
       description: |
+        앱 전환 후 제거 (#74). 앱은 기기 지오코더(iOS `CLGeocoder`, Android `Geocoder`)를 쓴다.
+
         네이버 Reverse Geocoding을 서버가 대신 부른다(Client Secret은 서버에만 있다).
         좌표는 소수 3자리(약 100m)로 반올림해 1일 동안 캐시한다. 서울 밖도 그대로 돌려준다.
         결과가 없는 좌표(바다 등)는 200 + 빈 문자열. 501·502이면 앱은 OS 지오코더 결과를 쓴다.
@@ -325,6 +379,39 @@ components:
           description: |
             응답 시각 기준으로 끝났는지(ends_at < now). 목록·지도는 끝난 항목을 반환하지 않으므로 항상 false.
             상세(/v1/spots/{id})와 저장 목록(/v1/me/saved)은 끝난 항목도 반환하고 true로 표시한다 — 앱은 '종료됨'으로 보여준다(저장 목록에서 흐리게).
+    RegionSpot:
+      type: object
+      description: |
+        지역 데이터 파일의 항목. `Spot`과 같고 `distance_m`(기기에서 계산)·`saved_at`(저장 목록 전용)만 없다.
+        `is_ended`는 `generated_at` 기준이므로 앱은 `ends_at`과 기기 현재 시각으로 다시 계산한다.
+      required: [id, title, category, lat, lng, starts_at, source, fetched_at, is_ended]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        summary: { type: string, description: GPT가 정리한 2~3줄 요약 }
+        category: { $ref: "#/components/schemas/Category" }
+        lat: { type: number, format: double }
+        lng: { type: number, format: double }
+        address: { type: string }
+        place_name: { type: string }
+        starts_at: { type: string, format: date-time }
+        ends_at: { type: string, format: date-time }
+        is_free: { type: boolean }
+        image_url: { type: string, format: uri }
+        source: { type: string }
+        source_url: { type: string, format: uri }
+        fetched_at: { type: string, format: date-time, description: 원본 소스에서 마지막으로 가져온 시각(앱의 "갱신 시각") }
+        is_ended: { type: boolean, description: "generated_at 기준으로 끝났는지(ends_at < generated_at)" }
+    RegionSpots:
+      type: object
+      required: [region, generated_at, count, items]
+      properties:
+        region: { type: string, example: seoul }
+        generated_at: { type: string, format: date-time, description: 이 내용이 만들어진 시각(UTC). 내용이 바뀔 때만 바뀐다 }
+        count: { type: integer, description: items 개수 }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/RegionSpot" }
     SpotPage:
       type: object
       required: [items]

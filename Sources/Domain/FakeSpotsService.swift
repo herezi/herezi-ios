@@ -41,14 +41,6 @@ public struct FakeSpotsService: SpotsService {
         return spot
     }
 
-    /// 서버 역지오코딩 흉내: 항상 서울시청 일대 이름.
-    public func reverseGeocode(_ coordinate: Coordinate) async throws -> String {
-        if let failure { throw failure }
-        return Self.sampleLabel
-    }
-
-    public static let sampleLabel = "중구 태평로1가"
-
     private static func matches(_ spot: Spot, categories: Set<SpotCategory>, freeOnly: Bool) -> Bool {
         !spot.isEnded && (categories.isEmpty || categories.contains(spot.category))
             && (!freeOnly || spot.isFree == true)
