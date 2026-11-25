@@ -4,6 +4,9 @@ import Foundation
 public enum SpotLinks {
     /// 운영 메일 (미확정 — 운영 주소가 정해지면 교체).
     public static let supportEmail = "help@herezi.com"
+    /// 이용약관·개인정보 처리방침 (임시 GitHub Pages — 도메인 구매 후 교체, herezi-ios#16). S6·S7이 같은 값을 쓴다.
+    public static let termsURL = URL(string: "https://herezi.github.io/terms/")!
+    public static let privacyURL = URL(string: "https://herezi.github.io/privacy/")!
     static let appName = "com.herezi.app"
 
     /// 공유 링크. 도메인은 아직 사지 않았고 텍스트 공유에만 쓴다.

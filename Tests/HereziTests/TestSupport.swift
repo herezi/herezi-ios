@@ -166,3 +166,142 @@ actor PagedService: SpotsService {
     func spot(id: String) async throws -> Spot { throw SpotsServiceError.notFound }
     func reverseGeocode(_ coordinate: Coordinate) async throws -> String { "" }
 }
+
+// MARK: - 계정·로그인
+
+/// 테스트용 저장 목록. `provider`가 있으면 로그인 상태(가짜 세션)로 시작한다.
+@MainActor
+func makeLibrary(
+    provider: AuthProvider? = .kakao, account: (any AccountService)? = nil, legacy: [Spot] = [],
+    defaults: UserDefaults = freshDefaults(), now: @escaping @Sendable () -> Date = { TestData.now }
+) -> SavedLibrary {
+    let auth = AuthService(
+        backend: FakeAuthBackend(now: now),
+        storage: InMemorySessionStore(provider.map { FakeAuthBackend.session(provider: $0, now: now()) }), now: now)
+    let store = SavedSpotsStore(defaults: defaults, key: "legacy")
+    for (offset, spot) in legacy.enumerated() { store.save(spot, at: now().addingTimeInterval(Double(-offset) * 60)) }
+    return SavedLibrary(
+        auth: auth, account: account ?? FakeAccountService(spots: TestData.spots, now: now), legacy: store,
+        cache: defaults, now: now)
+}
+
+/// 정해 둔 오류를 던지거나 기록하는 계정 API (FakeAccountService에 위임).
+actor ScriptedAccountService: AccountService {
+    private let base: FakeAccountService
+    var saveError: (any Error)?
+    var unsaveError: (any Error)?
+    var listError: (any Error)?
+    var deleteError: (any Error)?
+    private(set) var importCalls: [[String]] = []
+    private(set) var deleteCalls = 0
+
+    init(base: FakeAccountService = FakeAccountService(spots: TestData.spots, now: { TestData.now })) {
+        self.base = base
+    }
+
+    func set(save: (any Error)? = nil, unsave: (any Error)? = nil, list: (any Error)? = nil, delete: (any Error)? = nil)
+    {
+        saveError = save
+        unsaveError = unsave
+        listError = list
+        deleteError = delete
+    }
+
+    func savedPage(cursor: String?, accessToken: String) async throws -> SavedPage {
+        if let listError { throw listError }
+        return try await base.savedPage(cursor: cursor, accessToken: accessToken)
+    }
+
+    func save(spotID: String, accessToken: String) async throws {
+        if let saveError { throw saveError }
+        try await base.save(spotID: spotID, accessToken: accessToken)
+    }
+
+    func unsave(spotID: String, accessToken: String) async throws {
+        if let unsaveError { throw unsaveError }
+        try await base.unsave(spotID: spotID, accessToken: accessToken)
+    }
+
+    func importSaved(spotIDs: [String], accessToken: String) async throws -> SavedImportResult {
+        importCalls.append(spotIDs)
+        return try await base.importSaved(spotIDs: spotIDs, accessToken: accessToken)
+    }
+
+    func deleteAccount(accessToken: String) async throws {
+        deleteCalls += 1
+        if let deleteError { throw deleteError }
+        try await base.deleteAccount(accessToken: accessToken)
+    }
+}
+
+/// 요청별로 응답을 정해 두는 URLProtocol. 세션마다 `X-Stub-ID` 헤더로 핸들러를 나눠 병렬 테스트에서도 섞이지 않는다.
+final class StubURLProtocol: URLProtocol {
+    typealias Handler = @Sendable (URLRequest) throws -> (Int, Data)
+
+    private static let lock = NSLock()
+    nonisolated(unsafe) private static var handlers: [String: Handler] = [:]
+
+    /// `handler`를 쓰는 URLSession을 만든다.
+    static func session(_ handler: @escaping Handler) -> URLSession {
+        let id = UUID().uuidString
+        lock.withLock { handlers[id] = handler }
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [StubURLProtocol.self]
+        configuration.httpAdditionalHeaders = ["X-Stub-ID": id]
+        return URLSession(configuration: configuration)
+    }
+
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+    override func startLoading() {
+        let id = request.value(forHTTPHeaderField: "X-Stub-ID") ?? ""
+        let handler = Self.lock.withLock { Self.handlers[id] }
+        var request = self.request
+        // URLSession은 httpBody를 스트림으로 바꾼다 — 테스트가 본문을 읽을 수 있게 되돌린다.
+        if request.httpBody == nil, let stream = request.httpBodyStream {
+            request.httpBody = Data(reading: stream)
+        }
+        do {
+            guard let handler else { throw URLError(.unsupportedURL) }
+            let (status, data) = try handler(request)
+            let response = HTTPURLResponse(url: request.url!, statusCode: status, httpVersion: nil, headerFields: nil)!
+            client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+            client?.urlProtocol(self, didLoad: data)
+            client?.urlProtocolDidFinishLoading(self)
+        } catch {
+            client?.urlProtocol(self, didFailWithError: error)
+        }
+    }
+
+    override func stopLoading() {}
+}
+
+extension Data {
+    init(reading stream: InputStream) {
+        self.init()
+        stream.open()
+        defer { stream.close() }
+        var buffer = [UInt8](repeating: 0, count: 4_096)
+        while stream.hasBytesAvailable {
+            let count = stream.read(&buffer, maxLength: buffer.count)
+            guard count > 0 else { break }
+            append(buffer, count: count)
+        }
+    }
+}
+
+/// 요청을 순서대로 기록하는 상자 (URLProtocol 핸들러가 Sendable이어야 해서).
+final class RequestLog: @unchecked Sendable {
+    private let lock = NSLock()
+    private var stored: [URLRequest] = []
+
+    var requests: [URLRequest] { lock.withLock { stored } }
+
+    func append(_ request: URLRequest) { lock.withLock { stored.append(request) } }
+
+    func json(_ index: Int) -> [String: Any]? {
+        guard let body = requests[index].httpBody else { return nil }
+        return try? JSONSerialization.jsonObject(with: body) as? [String: Any]
+    }
+}

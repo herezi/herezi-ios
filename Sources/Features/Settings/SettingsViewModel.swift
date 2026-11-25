@@ -21,9 +21,9 @@ public final class SettingsViewModel {
         DataSource(name: "산림청·기상청", url: URL(string: "https://www.data.go.kr")!),
     ]
 
-    /// 이용약관·개인정보 처리방침 (임시 GitHub Pages — 도메인 구매 후 교체, herezi-ios#16).
-    public static let termsURL = URL(string: "https://herezi.github.io/terms/")!
-    public static let privacyURL = URL(string: "https://herezi.github.io/privacy/")!
+    /// 이용약관·개인정보 처리방침 (S7 로그인 시트와 같은 값 — `SpotLinks`).
+    public static let termsURL = SpotLinks.termsURL
+    public static let privacyURL = SpotLinks.privacyURL
 
     /// 오픈소스 라이선스 한 줄. `licenseFile`은 앱 번들 리소스 폴더 기준 경로.
     public struct OpenSourceLicense: Identifiable, Hashable, Sendable {
@@ -50,15 +50,44 @@ public final class SettingsViewModel {
     private let appVersion: String
     private let build: String
     private let osVersion: String
+    /// 계정 그룹(로그인·로그아웃·탈퇴). nil이면 계정 그룹을 그리지 않는다(미리보기).
+    public let account: AccountActions?
 
     public init(
-        permissions: any LocationPermissionProviding, appVersion: String, build: String, osVersion: String
+        permissions: any LocationPermissionProviding, appVersion: String, build: String, osVersion: String,
+        account: AccountActions? = nil
     ) {
+        self.account = account
         self.permissions = permissions
         self.permission = permissions.permission
         self.appVersion = appVersion
         self.build = build
         self.osVersion = osVersion
+    }
+
+    // MARK: 계정 (S6 계정 그룹)
+
+    /// 로그인 제공자. nil이면 로그인 전(행 **로그인** 하나).
+    public var provider: AuthProvider? { account?.auth.provider }
+
+    /// "카카오로 로그인됨" / "Apple로 로그인됨"
+    public var accountTitle: String? {
+        provider.map { "\($0.displayName)로 로그인됨" }
+    }
+
+    /// 로그인 행 → S7 시트("로그인하고 저장한 볼거리를 모아 보세요"). 성공하면 토스트 "로그인했어요"는 로그인 흐름이 띄운다.
+    public func login() {
+        account?.auth.requestLogin(.account)
+    }
+
+    public static let logoutTitle = "로그아웃할까요?"
+    public static let logoutMessage = "다시 로그인하면 저장한 볼거리를 그대로 볼 수 있어요."
+
+    /// 로그아웃 확인 → 세션·캐시 삭제, 카카오 SDK 로그아웃. 설정 화면에 머문 채 토스트.
+    public func logout() async {
+        guard let account else { return }
+        await account.signOut()
+        toastMessage = "로그아웃했어요"
     }
 
     /// 앱이 포그라운드로 돌아올 때 다시 읽는다(설정 앱에서 바꿨을 수 있음).

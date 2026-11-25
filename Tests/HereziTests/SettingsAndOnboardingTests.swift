@@ -48,6 +48,92 @@ struct SettingsViewModelTests {
         #expect(pretendard?.license == "SIL Open Font License 1.1")
         #expect(pretendard?.licenseFile == "Fonts/OFL.txt")
     }
+
+    private func settings(_ library: SavedLibrary, kakao: FakeKakaoLogin = FakeKakaoLogin()) -> SettingsViewModel {
+        SettingsViewModel(
+            permissions: FakeLocationPermissions(.authorized), appVersion: "1.0.0", build: "12", osVersion: "26.3",
+            account: AccountActions(library: library, account: FakeAccountService(), kakao: kakao))
+    }
+
+    @Test func 계정_그룹_로그인_전후() {
+        let loggedOut = settings(makeLibrary(provider: nil))
+        #expect(loggedOut.provider == nil && loggedOut.accountTitle == nil)
+        loggedOut.login()
+        #expect(loggedOut.account?.auth.loginRequest?.purpose == .account)
+
+        #expect(settings(makeLibrary(provider: .kakao)).accountTitle == "카카오로 로그인됨")
+        #expect(settings(makeLibrary(provider: .apple)).accountTitle == "Apple로 로그인됨")
+    }
+
+    @Test func 로그아웃하면_로그인_행으로_바뀌고_토스트() async {
+        let kakao = FakeKakaoLogin()
+        let viewModel = settings(makeLibrary(provider: .kakao), kakao: kakao)
+        await viewModel.logout()
+        #expect(viewModel.provider == nil)
+        #expect(kakao.logoutCount == 1)
+        #expect(viewModel.toastMessage == "로그아웃했어요")
+    }
+}
+
+@MainActor
+struct DeleteAccountViewModelTests {
+    private func make(
+        provider: AuthProvider = .kakao, account: ScriptedAccountService = ScriptedAccountService(),
+        kakao: FakeKakaoLogin = FakeKakaoLogin(), saved: [Spot] = []
+    ) async -> (DeleteAccountViewModel, SavedLibrary) {
+        let library = makeLibrary(provider: provider, account: account)
+        for spot in saved { _ = await library.save(spot) }
+        let actions = AccountActions(library: library, account: account, kakao: kakao)
+        return (DeleteAccountViewModel(actions: actions), library)
+    }
+
+    @Test func 지워지는_것_문구() async {
+        let (kakao, _) = await make(saved: Array(TestData.spots.prefix(3)))
+        #expect(kakao.savedLine == "저장한 볼거리 3개가 모두 지워져요")
+        #expect(kakao.providerLine == "카카오 계정 연결이 끊어져요")
+        let (apple, _) = await make(provider: .apple)
+        #expect(apple.savedLine == "저장한 볼거리가 모두 지워져요")
+        #expect(apple.providerLine == "Apple 계정 연결이 끊어져요")
+    }
+
+    @Test func 체크해야_탈퇴할_수_있고_성공하면_완료_화면() async {
+        let account = ScriptedAccountService()
+        let (viewModel, library) = await make(account: account)
+        #expect(!viewModel.canSubmit)
+        await viewModel.delete()
+        #expect(await account.deleteCalls == 0)
+
+        viewModel.isChecked = true
+        await viewModel.delete()
+        #expect(viewModel.phase == .done)
+        #expect(!library.isLoggedIn)
+    }
+
+    @Test func 실패하면_확인_화면_그대로_체크_유지_토스트() async {
+        let account = ScriptedAccountService()
+        await account.set(delete: AccountError.server)
+        let (viewModel, library) = await make(account: account)
+        viewModel.isChecked = true
+        await viewModel.delete()
+        #expect(viewModel.phase == .confirm)
+        #expect(viewModel.isChecked)
+        #expect(viewModel.toastMessage == "탈퇴하지 못했어요. 잠시 후 다시 시도해 주세요.")
+        #expect(library.isLoggedIn)
+
+        await account.set(delete: AccountError.offline)
+        await viewModel.delete()
+        #expect(viewModel.toastMessage == "인터넷 연결을 확인하고 다시 시도해 주세요.")
+    }
+
+    @Test func 세션이_만료되면_로그인_시트() async {
+        let account = ScriptedAccountService()
+        await account.set(delete: AuthError.unauthorized)
+        let (viewModel, library) = await make(account: account)
+        viewModel.isChecked = true
+        await viewModel.delete()
+        #expect(viewModel.phase == .confirm)
+        #expect(library.auth.loginRequest?.purpose == .account)
+    }
 }
 
 @MainActor

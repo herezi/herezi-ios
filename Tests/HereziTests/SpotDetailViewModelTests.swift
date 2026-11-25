@@ -9,13 +9,13 @@ struct SpotDetailViewModelTests {
     private var spots: [Spot] { TestData.spots }
 
     private func makeViewModel(
-        id: String, initial: Spot? = nil, service: (any SpotsService)? = nil, saved: SavedSpotsStore? = nil,
+        id: String, initial: Spot? = nil, service: (any SpotsService)? = nil, saved: SavedLibrary? = nil,
         fallback: Bool = false
     ) -> SpotDetailViewModel {
         let now = self.now
         return SpotDetailViewModel(
             id: id, initial: initial, service: service ?? FakeSpotsService(spots: spots),
-            saved: saved ?? SavedSpotsStore(defaults: freshDefaults()), usesFallbackLocation: fallback,
+            saved: saved ?? makeLibrary(), usesFallbackLocation: fallback,
             now: { now })
     }
 
@@ -83,18 +83,26 @@ struct SpotDetailViewModelTests {
         #expect(withoutInitial.state == .failed)
     }
 
-    @Test func 저장_토글은_로컬에_저장하고_토스트를_띄운다() {
-        let store = SavedSpotsStore(defaults: freshDefaults())
-        let viewModel = makeViewModel(id: "sample-1", initial: spots[0], saved: store)
+    @Test func 저장_토글은_계정에_저장하고_토스트를_띄운다() async {
+        let library = makeLibrary()
+        let viewModel = makeViewModel(id: "sample-1", initial: spots[0], saved: library)
 
-        viewModel.toggleSave()
+        await viewModel.toggleSave()
         #expect(viewModel.isSaved)
-        #expect(store.items.first?.savedAt == now)
+        #expect(library.items.first?.savedAt == now)
         #expect(viewModel.toastMessage == "저장했어요")
 
-        viewModel.toggleSave()
+        await viewModel.toggleSave()
         #expect(!viewModel.isSaved)
         #expect(viewModel.toastMessage == "저장을 취소했어요")
+    }
+
+    @Test func 로그인_전_저장은_로그인_시트를_띄우고_아이콘을_채우지_않는다() async {
+        let library = makeLibrary(provider: nil)
+        let viewModel = makeViewModel(id: "sample-1", initial: spots[0], saved: library)
+        await viewModel.toggleSave()
+        #expect(!viewModel.isSaved)
+        #expect(library.auth.loginRequest?.purpose == .save)
     }
 
     @Test func 공유_문구에_링크를_담는다() {

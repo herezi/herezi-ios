@@ -130,7 +130,7 @@ public struct HomeView: View {
                             spot: hero.spot, badge: viewModel.clock.heroBadge(hero.spot),
                             meta: viewModel.clock.heroMeta(hero.spot), isSaved: viewModel.isSaved(hero.spot)
                         ) {
-                            viewModel.toggleSave(hero.spot)
+                            Task { await viewModel.toggleSave(hero.spot) }
                         }
                     }
                     .buttonStyle(CardPressStyle())
@@ -201,7 +201,7 @@ public struct HomeView: View {
                             viewModel.isSaved(spot) ? "저장 취소" : "저장",
                             systemImage: viewModel.isSaved(spot) ? "bookmark.slash" : "bookmark"
                         ) {
-                            viewModel.toggleSave(spot)
+                            Task { await viewModel.toggleSave(spot) }
                         }
                     }
                 }

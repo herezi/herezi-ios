@@ -1,5 +1,6 @@
 import DesignSystem
 import Domain
+import FeatureAuth
 import FeatureHome
 import FeatureNearby
 import FeatureOnboarding
@@ -47,8 +48,17 @@ final class AppModel {
     let service = AppEnvironment.makeSpotsService()
     let location = CoreLocationProvider(timeout: .seconds(5))
     let naming: any PlaceNaming
-    let saved = SavedSpotsStore()
     let recents = RecentSearchesStore()
+    /// 로그인 세션(Supabase) — 로그인 시트는 `auth.loginRequest`로 띄운다.
+    let auth: AuthService
+    /// 계정 저장 목록 (+ v1.3 이전 기기 로컬 저장 `library.legacy`).
+    let library: SavedLibrary
+    let kakao: any KakaoLoginProviding
+    let account: AccountActions
+    /// 앱 전체 토스트(로그인 직후 "저장했어요" → "기기에 저장했던 N개를…"). 차례대로 보여준다.
+    var toast: HZToast?
+    @ObservationIgnored private var toastQueue: [String] = []
+    @ObservationIgnored private var toastTask: Task<Void, Never>?
     let home: HomeViewModel
     let map: MapViewModel
     var showsOnboarding: Bool
@@ -58,9 +68,15 @@ final class AppModel {
     var savedPath = NavigationPath()
 
     init() {
+        KakaoLoginProvider.initializeSDK()
+        auth = AppEnvironment.makeAuthService()
+        let accountService = AppEnvironment.makeAccountService()
+        library = SavedLibrary(auth: auth, account: accountService, legacy: SavedSpotsStore())
+        kakao = AppEnvironment.makeKakaoLogin()
+        account = AccountActions(library: library, account: accountService, kakao: kakao)
         // 서버 역지오코딩(구·동) → 실패·빈 값이면 OS 지오코더.
         naming = ServerPlaceNaming(service: service, fallback: GeocoderPlaceNaming())
-        home = HomeViewModel(service: service, location: location, naming: naming, saved: saved)
+        home = HomeViewModel(service: service, location: location, naming: naming, saved: library)
         // 스크린리더가 켜져 있으면 시트를 펼친 채 시작한다(목록이 지도의 대안, S2 접근성).
         map = MapViewModel(
             service: service, location: location, naming: naming,
@@ -100,6 +116,33 @@ final class AppModel {
         tab = .nearby
     }
 
+    /// 탈퇴 완료 → 탭을 처음 상태로 되돌리고 주변 탭 홈(S1)으로.
+    func resetAfterAccountDeletion() {
+        nearbyPath = NavigationPath()
+        mapPath = NavigationPath()
+        savedPath = NavigationPath()
+        tab = .nearby
+    }
+
+    /// 로그인 성공 뒤(시트는 이미 닫힘): 기기 저장 옮기기 → 대기 동작 → 토스트들.
+    func didSignIn(_ request: LoginRequest) async {
+        showToasts(await library.completeLogin(request))
+    }
+
+    /// 토스트를 차례대로(각 2.5초) 보여준다.
+    func showToasts(_ messages: [String]) {
+        toastQueue += messages
+        guard toastTask == nil else { return }
+        toastTask = Task { [weak self] in
+            while let self, !self.toastQueue.isEmpty {
+                let next = HZToast(self.toastQueue.removeFirst())
+                self.toast = next
+                try? await Task.sleep(for: next.duration + .milliseconds(300))
+            }
+            self?.toastTask = nil
+        }
+    }
+
     /// 위치를 알면 실제 위치 (저장 거리 계산용). 서울시청 기준이면 nil.
     var knownCoordinate: Coordinate? {
         home.isUsingFallbackLocation ? nil : home.coordinate
@@ -124,6 +167,14 @@ struct RootView: View {
             }
         }
         .animation(HZMotion.base, value: app.showsOnboarding)
+        .hzToast($app.toast)
+        .sheet(item: Binding(get: { app.auth.loginRequest }, set: { app.auth.loginRequest = $0 })) { request in
+            LoginSheet(
+                viewModel: LoginViewModel(
+                    request: request, auth: app.auth, kakao: app.kakao, onSignedIn: app.didSignIn))
+        }
+        .onOpenURL { url in _ = KakaoLoginProvider.handle(url) }
+        .task { await app.library.start() }
     }
 
     private var tabs: some View {
@@ -153,7 +204,7 @@ struct RootView: View {
 
             NavigationStack(path: $app.savedPath) {
                 SavedView(
-                    viewModel: SavedViewModel(store: app.saved, service: app.service, origin: app.knownCoordinate),
+                    viewModel: SavedViewModel(library: app.library, origin: app.knownCoordinate),
                     onBrowse: app.goHome,
                     onSettings: { app.savedPath.append(AppModel.Route.settings) }
                 )
@@ -189,7 +240,8 @@ struct RootView: View {
             SettingsView(
                 viewModel: SettingsViewModel(
                     permissions: app.location, appVersion: AppEnvironment.appVersion, build: AppEnvironment.build,
-                    osVersion: UIDevice.current.systemVersion))
+                    osVersion: UIDevice.current.systemVersion, account: app.account),
+                onAccountDeleted: app.resetAfterAccountDeletion)
         case .spot(let id):
             detail(id: id, initial: nil)
         case .list(let filter, let origin, let placeName):
@@ -206,7 +258,7 @@ struct RootView: View {
     func detail(id: String, initial: Spot?) -> some View {
         SpotDetailView(
             viewModel: SpotDetailViewModel(
-                id: id, initial: initial, service: app.service, saved: app.saved,
+                id: id, initial: initial, service: app.service, saved: app.library,
                 usesFallbackLocation: app.home.isUsingFallbackLocation),
             onGoHome: app.goHome)
     }
@@ -241,6 +293,52 @@ enum AppEnvironment {
         return LiveSpotsService(client: APIClient(baseURL: APIClient.baseURL()))
     }
 
+    /// Debug `-HZFakeAuth kakao|apple|none`: 가짜 세션(서버·SDK 없이)으로 시작 — 스크린샷·UI 테스트용.
+    static var fakeAuthProvider: String? {
+        #if DEBUG
+            UserDefaults.standard.string(forKey: "HZFakeAuth")
+        #else
+            nil
+        #endif
+    }
+
+    /// Supabase 설정(Info.plist ← Config/Secrets.xcconfig). 샘플 모드에서 설정이 없으면 가짜 인증을 쓴다.
+    @MainActor
+    static func makeAuthService() -> AuthService {
+        if let fake = fakeAuthProvider {
+            let session = AuthProvider(rawValue: fake).map { FakeAuthBackend.session(provider: $0) }
+            return AuthService(backend: FakeAuthBackend(), storage: InMemorySessionStore(session))
+        }
+        let keychain = KeychainSessionStore()
+        keychain.clearIfFreshInstall()
+        let config = SupabaseAuthBackend.Config.from()
+        if config == nil && usesFakeAPI() {
+            return AuthService(backend: FakeAuthBackend(), storage: keychain)
+        }
+        return AuthService(backend: SupabaseAuthBackend(config: config), storage: keychain)
+    }
+
+    static func makeAccountService() -> any AccountService {
+        if usesFakeAPI() {
+            #if DEBUG
+                let seeded = UserDefaults.standard.bool(forKey: "HZSeedAccount")
+                return FakeAccountService(spots: SampleSpots.demo, savedIDs: seeded ? SampleSpots.demo.map(\.id) : [])
+            #else
+                return FakeAccountService(spots: SampleSpots.demo)
+            #endif
+        }
+        return LiveAccountService(client: APIClient(baseURL: APIClient.baseURL()))
+    }
+
+    /// 카카오 키가 없거나 가짜 인증이면 가짜 카카오 로그인(샘플 모드 개발용).
+    @MainActor
+    static func makeKakaoLogin() -> any KakaoLoginProviding {
+        if fakeAuthProvider != nil || (KakaoLoginProvider.nativeAppKey == nil && usesFakeAPI()) {
+            return FakeKakaoLogin()
+        }
+        return KakaoLoginProvider()
+    }
+
     static var appVersion: String {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "-"
     }
@@ -254,9 +352,11 @@ enum AppEnvironment {
 ///
 ///     xcrun simctl launch booted com.herezi.app -HZScreen search -HZSearchQuery 광화문
 ///
-/// - `-HZScreen onboarding|home|list|map|map-selected|map-moved|search|saved|settings|detail|detail-ended`
+/// - `-HZScreen onboarding|home|list|map|map-selected|map-moved|search|saved|settings|detail|detail-ended|login`
 /// - `-HZSearchQuery <검색어>`: 검색 화면을 열자마자 조회
-/// - `-HZSeedSaved YES`: 샘플 볼거리를 저장 목록에 넣는다
+/// - `-HZSeedSaved YES`: 샘플 볼거리를 기기 로컬 저장(v1.3 이전 저장)에 넣는다 — 첫 로그인 옮기기 확인용
+/// - `-HZFakeAuth kakao|apple|none`: 가짜 세션으로 시작(로그인 상태 화면 확인용)
+/// - `-HZSeedAccount YES`: (샘플 모드) 계정 저장 목록에 샘플 볼거리를 넣는다
 enum DebugLaunch {
     static var screen: String? {
         #if DEBUG
@@ -278,7 +378,7 @@ enum DebugLaunch {
     static func apply(to app: AppModel) {
         if UserDefaults.standard.bool(forKey: "HZSeedSaved") {
             for (offset, spot) in SampleSpots.all.enumerated() {
-                app.saved.save(spot, at: Date().addingTimeInterval(-Double(offset) * 3_600))
+                app.library.legacy.save(spot, at: Date().addingTimeInterval(-Double(offset) * 3_600))
             }
         }
         if let query = searchQuery {
@@ -312,6 +412,12 @@ enum DebugLaunch {
             app.savedPath.append(AppModel.Route.settings)
         case "detail": app.nearbyPath.append(AppModel.Route.spot(id: "sample-1"))
         case "detail-ended": app.nearbyPath.append(AppModel.Route.spot(id: SampleSpots.endedID))
+        case "login":
+            app.nearbyPath.append(AppModel.Route.spot(id: "sample-1"))
+            Task {
+                try? await Task.sleep(for: .seconds(1))
+                app.auth.requestLogin(.save)
+            }
         default: break
         }
     }

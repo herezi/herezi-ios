@@ -42,9 +42,31 @@ public struct APIClient: Sendable {
         return url
     }
 
-    func get<T: Decodable>(_ type: T.Type, path: String, query: [URLQueryItem] = []) async throws -> T {
+    func get<T: Decodable>(
+        _ type: T.Type, path: String, query: [URLQueryItem] = [], bearer: String? = nil
+    ) async throws -> T {
+        let data = try await send("GET", path: path, query: query, bearer: bearer)
+        do {
+            return try JSONDecoder.herezi.decode(T.self, from: data)
+        } catch {
+            throw APIError.decoding(String(describing: error))
+        }
+    }
+
+    /// 요청을 보내고 2xx 본문을 돌려준다. 아니면 계약의 `Error` 본문을 담아 `APIError.server`.
+    /// `bearer`가 있으면 `Authorization: Bearer <token>` (`/v1/me/*`).
+    @discardableResult
+    func send(
+        _ method: String, path: String, query: [URLQueryItem] = [], bearer: String? = nil, body: Data? = nil
+    ) async throws -> Data {
         var request = URLRequest(url: try makeURL(path: path, query: query))
+        request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Accept")
+        if let bearer { request.setValue("Bearer \(bearer)", forHTTPHeaderField: "Authorization") }
+        if let body {
+            request.httpBody = body
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        }
         let data: Data
         let response: URLResponse
         do {
@@ -57,11 +79,7 @@ public struct APIClient: Sendable {
             let body = try? JSONDecoder.herezi.decode(ErrorDTO.self, from: data)
             throw APIError.server(status: status, code: body?.code, message: body?.message)
         }
-        do {
-            return try JSONDecoder.herezi.decode(T.self, from: data)
-        } catch {
-            throw APIError.decoding(String(describing: error))
-        }
+        return data
     }
 }
 

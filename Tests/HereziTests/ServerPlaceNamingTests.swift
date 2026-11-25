@@ -40,7 +40,7 @@ struct ServerPlaceNamingTests {
         let viewModel = HomeViewModel(
             service: service, location: FixedLocationProvider(),
             naming: ServerPlaceNaming(service: service, fallback: FixedPlaceNaming(name: nil)),
-            saved: SavedSpotsStore(defaults: freshDefaults()), now: { TestData.now })
+            saved: makeLibrary(), now: { TestData.now })
         await viewModel.reload()
         #expect(viewModel.placeName == "중구 태평로1가")
     }

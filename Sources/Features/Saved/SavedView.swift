@@ -32,7 +32,7 @@ public struct SavedView: View {
                             .accessibilityLabel("설정")
                     }
                 }
-                if !viewModel.isEmpty {
+                if viewModel.canEdit {
                     ToolbarItem(placement: .topBarTrailing) {
                         Button(viewModel.isEditing ? "완료" : "편집") {
                             viewModel.setEditing(!viewModel.isEditing)
@@ -43,7 +43,7 @@ public struct SavedView: View {
             }
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 if viewModel.isEditing {
-                    Button(viewModel.deleteSelectedTitle) { viewModel.deleteSelected() }
+                    Button(viewModel.deleteSelectedTitle) { Task { await viewModel.deleteSelected() } }
                         .buttonStyle(HZPrimaryButtonStyle())
                         .disabled(viewModel.selection.isEmpty)
                         .padding(.horizontal, HZSpace.screen)
@@ -52,45 +52,85 @@ public struct SavedView: View {
                 }
             }
             .onAppear { Task { await viewModel.refresh() } }
-            .hzToast($toast) { viewModel.undo() }
-            .onChange(of: viewModel.toastMessage) { _, message in
-                guard let message else { return }
-                toast = HZToast(message, actionTitle: "되돌리기", duration: .seconds(4))
-                viewModel.toastMessage = nil
+            .hzToast($toast) { Task { await viewModel.undo() } }
+            .onChange(of: viewModel.toast) { _, new in
+                guard let new else { return }
+                toast =
+                    new.undo
+                    ? HZToast(new.message, actionTitle: "되돌리기", duration: .seconds(4)) : HZToast(new.message)
+                viewModel.toast = nil
             }
             .confirmationDialog(
                 viewModel.clearEndedPrompt, isPresented: $confirmingClear, titleVisibility: .visible
             ) {
-                Button("지우기", role: .destructive) { viewModel.clearEnded() }
+                Button("지우기", role: .destructive) { Task { await viewModel.clearEnded() } }
                 Button("취소", role: .cancel) {}
             }
     }
 
     @ViewBuilder private var content: some View {
-        if viewModel.isEmpty {
+        switch viewModel.content {
+        case .loggedOut:
+            signInPrompt
+        case .loading:
+            HZSkeletonList()
+        case .failed:
+            HZStateView(symbol: "wifi.exclamationmark", title: "저장 목록을 불러오지 못했어요", message: "잠시 후 다시 시도해 주세요.") {
+                HZStateButton("다시 시도") { Task { await viewModel.refresh(userInitiated: true) } }
+            }
+        case .empty:
             HZStateView(
                 symbol: "bookmark", title: "저장한 볼거리가 없어요", message: "마음에 드는 곳을 저장해 두면 여기에 모여요."
             ) {
                 HZStateButton("주변 둘러보기", action: onBrowse)
             }
-        } else {
-            List {
-                Section {
-                    ForEach(viewModel.active) { row($0) }
+            .refreshable { await viewModel.refresh(userInitiated: true) }
+        case .list:
+            list
+        }
+    }
+
+    /// 로그인 전 본문 (`SignInPrompt`, 목업 saved-logged-out.png). 브랜드 버튼은 S7 시트에만 둔다.
+    private var signInPrompt: some View {
+        HZStateView(symbol: "bookmark", title: SavedViewModel.signInTitle, message: viewModel.signInMessage) {
+            VStack(spacing: HZSpace.s3) {
+                Button(action: viewModel.login) {
+                    Text("로그인").padding(.horizontal, HZSpace.s8)
                 }
-                if !viewModel.ended.isEmpty {
-                    Section {
-                        ForEach(viewModel.ended) { row($0) }
-                    } header: {
-                        endedHeader
-                    }
+                .buttonStyle(HZPrimaryButtonStyle(height: HZSize.buttonMedium, radius: HZRadius.sm))
+                .fixedSize()
+                .accessibilityHint("로그인 창이 열려요")
+                Button("주변 둘러보기", action: onBrowse)
+                    .buttonStyle(HZTextButtonStyle())
+            }
+        }
+    }
+
+    private var list: some View {
+        List {
+            Section {
+                ForEach(viewModel.active) { row($0) }
+            }
+            if !viewModel.ended.isEmpty {
+                Section {
+                    ForEach(viewModel.ended) { row($0) }
+                } header: {
+                    endedHeader
+                } footer: {
+                    Text("끝난 지 90일이 지나면 자동으로 지워져요.")
+                        .font(Font.hz.caption)
+                        .foregroundStyle(Color.hz.textSecondary)
+                        .padding(.horizontal, HZSpace.screen)
+                        .padding(.vertical, HZSpace.s3)
+                        .listRowInsets(EdgeInsets())
                 }
             }
-            .listStyle(.plain)
-            .scrollContentBackground(.hidden)
-            .listSectionSpacing(0)
-            .environment(\.defaultMinListHeaderHeight, 0)
         }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .listSectionSpacing(0)
+        .environment(\.defaultMinListHeaderHeight, 0)
+        .refreshable { await viewModel.refresh(userInitiated: true) }
     }
 
     private var endedHeader: some View {
@@ -132,9 +172,9 @@ public struct SavedView: View {
             } else {
                 SpotRowLink(spot: spot) { card(spot) }
                     .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                        Button("삭제", role: .destructive) { viewModel.delete(saved.id) }
+                        Button("삭제", role: .destructive) { Task { await viewModel.delete(saved.id) } }
                     }
-                    .accessibilityAction(named: "삭제") { viewModel.delete(saved.id) }
+                    .accessibilityAction(named: "삭제") { Task { await viewModel.delete(saved.id) } }
             }
         }
         .listRowInsets(EdgeInsets())
@@ -147,10 +187,25 @@ public struct SavedView: View {
     }
 }
 
-#Preview {
-    let store = SavedSpotsStore(defaults: UserDefaults(suiteName: "preview-saved")!)
-    for spot in SampleSpots.all { store.save(spot) }
+#Preview("로그인 후") {
+    let auth = AuthService(
+        backend: FakeAuthBackend(), storage: InMemorySessionStore(FakeAuthBackend.session(provider: .kakao)))
+    let library = SavedLibrary(
+        auth: auth, account: FakeAccountService(savedIDs: SampleSpots.all.map(\.id)),
+        legacy: SavedSpotsStore(defaults: UserDefaults(suiteName: "preview-legacy")!),
+        cache: UserDefaults(suiteName: "preview-saved")!)
     return NavigationStack {
-        SavedView(viewModel: SavedViewModel(store: store, service: FakeSpotsService()))
+        SavedView(viewModel: SavedViewModel(library: library))
+    }
+}
+
+#Preview("로그인 전") {
+    let auth = AuthService(backend: FakeAuthBackend(), storage: InMemorySessionStore())
+    let library = SavedLibrary(
+        auth: auth, account: FakeAccountService(),
+        legacy: SavedSpotsStore(defaults: UserDefaults(suiteName: "preview-legacy")!),
+        cache: UserDefaults(suiteName: "preview-saved")!)
+    return NavigationStack {
+        SavedView(viewModel: SavedViewModel(library: library))
     }
 }

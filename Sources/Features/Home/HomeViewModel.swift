@@ -31,11 +31,11 @@ public final class HomeViewModel {
     private let service: any SpotsService
     private let location: any LocationProviding
     private let naming: any PlaceNaming
-    private let saved: SavedSpotsStore
+    private let saved: SavedLibrary
     private let now: @Sendable () -> Date
 
     public init(
-        service: any SpotsService, location: any LocationProviding, naming: any PlaceNaming, saved: SavedSpotsStore,
+        service: any SpotsService, location: any LocationProviding, naming: any PlaceNaming, saved: SavedLibrary,
         now: @escaping @Sendable () -> Date = { Date() }
     ) {
         self.service = service
@@ -101,14 +101,9 @@ public final class HomeViewModel {
 
     public func isSaved(_ spot: Spot) -> Bool { saved.isSaved(spot.id) }
 
-    public func toggleSave(_ spot: Spot) {
-        if saved.isSaved(spot.id) {
-            saved.remove(ids: [spot.id])
-            toastMessage = "저장을 취소했어요"
-        } else {
-            saved.save(spot, at: now())
-            toastMessage = "저장했어요"
-        }
+    /// 저장/취소 (계정). 로그인 전이면 로그인 시트를 띄우고, 로그인 뒤 저장한다(S7).
+    public func toggleSave(_ spot: Spot) async {
+        if let message = await saved.toggle(spot) { toastMessage = message }
     }
 
     // MARK: 카드 문구
