@@ -165,6 +165,15 @@ struct SavedImportRequestDTO: Encodable, Sendable {
     }
 }
 
+/// `components.schemas.DeleteMeRequest` — Apple 사용자 탈퇴 때 재인증 코드(herezi-api#72).
+struct DeleteMeRequestDTO: Encodable, Sendable {
+    let appleAuthorizationCode: String
+
+    enum CodingKeys: String, CodingKey {
+        case appleAuthorizationCode = "apple_authorization_code"
+    }
+}
+
 /// `components.schemas.SavedImportResult`
 struct SavedImportResultDTO: Decodable, Sendable {
     let imported: Int

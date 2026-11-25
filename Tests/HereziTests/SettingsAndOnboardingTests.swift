@@ -53,7 +53,8 @@ struct SettingsViewModelTests {
     private func settings(_ library: SavedLibrary, kakao: FakeKakaoLogin = FakeKakaoLogin()) -> SettingsViewModel {
         SettingsViewModel(
             permissions: FakeLocationPermissions(.authorized), appVersion: "1.0.0", build: "12", osVersion: "26.3",
-            account: AccountActions(library: library, account: FakeAccountService(), kakao: kakao))
+            account: AccountActions(
+                library: library, account: FakeAccountService(), kakao: kakao, apple: FakeAppleReauth()))
     }
 
     @Test func 계정_그룹_로그인_전후() {
@@ -80,11 +81,11 @@ struct SettingsViewModelTests {
 struct DeleteAccountViewModelTests {
     private func make(
         provider: AuthProvider = .kakao, account: ScriptedAccountService = ScriptedAccountService(),
-        kakao: FakeKakaoLogin = FakeKakaoLogin(), saved: [Spot] = []
+        kakao: FakeKakaoLogin = FakeKakaoLogin(), apple: FakeAppleReauth = FakeAppleReauth(), saved: [Spot] = []
     ) async -> (DeleteAccountViewModel, SavedLibrary) {
         let library = makeLibrary(provider: provider, account: account)
         for spot in saved { _ = await library.save(spot) }
-        let actions = AccountActions(library: library, account: account, kakao: kakao)
+        let actions = AccountActions(library: library, account: account, kakao: kakao, apple: apple)
         return (DeleteAccountViewModel(actions: actions), library)
     }
 
@@ -124,6 +125,37 @@ struct DeleteAccountViewModelTests {
         await account.set(delete: AccountError.offline)
         await viewModel.delete()
         #expect(viewModel.toastMessage == "인터넷 연결을 확인하고 다시 시도해 주세요.")
+    }
+
+    @Test func Apple_재인증_취소면_탈퇴를_멈추고_안내() async {
+        let account = ScriptedAccountService()
+        let apple = FakeAppleReauth(result: .failure(.cancelled))
+        let (viewModel, library) = await make(provider: .apple, account: account, apple: apple)
+        viewModel.isChecked = true
+        await viewModel.delete()
+        #expect(viewModel.phase == .confirm)
+        #expect(viewModel.isChecked)
+        #expect(viewModel.toastMessage == "Apple 확인을 취소해서 탈퇴하지 않았어요.")
+        #expect(await account.deleteCalls == 0)
+        #expect(library.isLoggedIn)
+
+        // 다시 누르면 재인증부터 다시 하고, 확인하면 탈퇴된다.
+        apple.result = .success("apple-code")
+        await viewModel.delete()
+        #expect(viewModel.phase == .done)
+        #expect(apple.requestCount == 2)
+        #expect(await account.deleteAppleCodes == ["apple-code"])
+    }
+
+    @Test func Apple_재인증_거부면_기본_실패_토스트() async {
+        let account = ScriptedAccountService()
+        await account.set(delete: AccountError.appleReauthRequired)
+        let (viewModel, library) = await make(provider: .apple, account: account)
+        viewModel.isChecked = true
+        await viewModel.delete()
+        #expect(viewModel.phase == .confirm)
+        #expect(viewModel.toastMessage == "탈퇴하지 못했어요. 잠시 후 다시 시도해 주세요.")
+        #expect(library.isLoggedIn)
     }
 
     @Test func 세션이_만료되면_로그인_시트() async {

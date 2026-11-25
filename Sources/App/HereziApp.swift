@@ -82,7 +82,8 @@ final class AppModel {
         let accountService = AppEnvironment.makeAccountService()
         library = SavedLibrary(auth: auth, account: accountService, legacy: SavedSpotsStore())
         kakao = AppEnvironment.makeKakaoLogin()
-        account = AccountActions(library: library, account: accountService, kakao: kakao)
+        account = AccountActions(
+            library: library, account: accountService, kakao: kakao, apple: AppEnvironment.makeAppleReauth())
         // 위치명은 기기 지오코더만 쓴다 — 좌표를 서버로 보내지 않는다(#37).
         naming = GeocoderPlaceNaming()
         home = HomeViewModel(service: service, location: location, naming: naming, saved: library)
@@ -372,6 +373,15 @@ enum AppEnvironment {
             return FakeKakaoLogin()
         }
         return KakaoLoginProvider()
+    }
+
+    /// 가짜 인증·샘플 모드면 가짜 Apple 재인증(시스템 시트 없이 탈퇴 흐름 확인).
+    @MainActor
+    static func makeAppleReauth() -> any AppleReauthorizing {
+        if fakeAuthProvider != nil || usesFakeAPI() {
+            return FakeAppleReauth()
+        }
+        return AppleReauthorizer()
     }
 
     static var appVersion: String {

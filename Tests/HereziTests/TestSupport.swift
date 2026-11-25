@@ -184,6 +184,7 @@ actor ScriptedAccountService: AccountService {
     var deleteError: (any Error)?
     private(set) var importCalls: [[String]] = []
     private(set) var deleteCalls = 0
+    private(set) var deleteAppleCodes: [String?] = []
 
     init(base: FakeAccountService = FakeAccountService(spots: TestData.spots, now: { TestData.now })) {
         self.base = base
@@ -217,10 +218,11 @@ actor ScriptedAccountService: AccountService {
         return try await base.importSaved(spotIDs: spotIDs, accessToken: accessToken)
     }
 
-    func deleteAccount(accessToken: String) async throws {
+    func deleteAccount(accessToken: String, appleAuthorizationCode: String?) async throws {
         deleteCalls += 1
+        deleteAppleCodes.append(appleAuthorizationCode)
         if let deleteError { throw deleteError }
-        try await base.deleteAccount(accessToken: accessToken)
+        try await base.deleteAccount(accessToken: accessToken, appleAuthorizationCode: appleAuthorizationCode)
     }
 }
 

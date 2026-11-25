@@ -106,7 +106,7 @@ struct SavedLibraryTests {
         try await library.refresh()
 
         let kakao = FakeKakaoLogin()
-        await AccountActions(library: library, account: account, kakao: kakao).signOut()
+        await AccountActions(library: library, account: account, kakao: kakao, apple: FakeAppleReauth()).signOut()
 
         #expect(!library.isLoggedIn)
         #expect(library.items.isEmpty)
@@ -129,13 +129,55 @@ struct SavedLibraryTests {
         _ = await library.save(spots[0])
         let kakao = FakeKakaoLogin()
 
-        try await AccountActions(library: library, account: account, kakao: kakao).deleteAccount()
+        try await AccountActions(library: library, account: account, kakao: kakao, apple: FakeAppleReauth())
+            .deleteAccount()
 
         #expect(kakao.unlinkCount == 1)
         #expect(await account.deleteCalls == 1)
         #expect(!library.isLoggedIn)
         #expect(library.items.isEmpty)
         #expect(library.legacyCount == 0)
+    }
+
+    @Test func Apple_탈퇴는_재인증_코드를_보내고_카카오_연결끊기는_안_한다() async throws {
+        let account = ScriptedAccountService()
+        let library = makeLibrary(provider: .apple, account: account)
+        let kakao = FakeKakaoLogin()
+        let apple = FakeAppleReauth(result: .success("apple-code"))
+
+        try await AccountActions(library: library, account: account, kakao: kakao, apple: apple).deleteAccount()
+
+        #expect(apple.requestCount == 1)
+        #expect(kakao.unlinkCount == 0)
+        #expect(await account.deleteAppleCodes == ["apple-code"])
+        #expect(!library.isLoggedIn)
+    }
+
+    @Test func 카카오_탈퇴는_Apple_재인증_없이_코드_없음() async throws {
+        let account = ScriptedAccountService()
+        let library = makeLibrary(provider: .kakao, account: account)
+        let apple = FakeAppleReauth()
+
+        try await AccountActions(library: library, account: account, kakao: FakeKakaoLogin(), apple: apple)
+            .deleteAccount()
+
+        #expect(apple.requestCount == 0)
+        #expect(await account.deleteAppleCodes == [nil])
+    }
+
+    @Test func Apple_재인증을_취소하면_서버를_부르지_않고_아무것도_지우지_않는다() async {
+        let account = ScriptedAccountService()
+        let library = makeLibrary(provider: .apple, account: account)
+        _ = await library.save(spots[0])
+        let apple = FakeAppleReauth(result: .failure(.cancelled))
+
+        await #expect(throws: AuthError.cancelled) {
+            try await AccountActions(library: library, account: account, kakao: FakeKakaoLogin(), apple: apple)
+                .deleteAccount()
+        }
+        #expect(await account.deleteCalls == 0)
+        #expect(library.isLoggedIn)
+        #expect(library.isSaved(spots[0].id))
     }
 
     @Test func 탈퇴_실패면_아무것도_지우지_않는다() async {
@@ -145,7 +187,9 @@ struct SavedLibraryTests {
         _ = await library.save(spots[0])
 
         await #expect(throws: AccountError.server) {
-            try await AccountActions(library: library, account: account, kakao: FakeKakaoLogin()).deleteAccount()
+            try await AccountActions(
+                library: library, account: account, kakao: FakeKakaoLogin(), apple: FakeAppleReauth()
+            ).deleteAccount()
         }
         #expect(library.isLoggedIn)
         #expect(library.isSaved(spots[0].id))

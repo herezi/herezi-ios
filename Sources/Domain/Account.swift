@@ -34,6 +34,8 @@ public enum AccountError: Error, Sendable, Equatable {
     case offline
     /// 그 밖의 서버 오류(5xx 등).
     case server
+    /// 400 `apple_reauth_required` — Apple 사용자 탈퇴에 재인증 코드가 없거나 Apple이 거부함(만료·재사용). 다시 인증해 재시도.
+    case appleReauthRequired
 }
 
 /// Port: 로그인 사용자 API(`/v1/me/*`). `Networking.LiveAccountService`가 구현한다.
@@ -43,8 +45,16 @@ public protocol AccountService: Sendable {
     func save(spotID: String, accessToken: String) async throws
     func unsave(spotID: String, accessToken: String) async throws
     func importSaved(spotIDs: [String], accessToken: String) async throws -> SavedImportResult
-    /// 회원 탈퇴 (`DELETE /v1/me`).
-    func deleteAccount(accessToken: String) async throws
+    /// 회원 탈퇴 (`DELETE /v1/me`). Apple 사용자는 탈퇴 직전 재인증으로 받은 authorization code를 함께 보낸다
+    /// (서버가 Apple 토큰을 철회한 뒤 지운다, herezi-api#72). 다른 제공자는 nil.
+    func deleteAccount(accessToken: String, appleAuthorizationCode: String?) async throws
+}
+
+/// Port: 탈퇴 직전 Sign in with Apple 재인증 (FeatureAuth `AppleReauthorizer`가 AuthenticationServices로 구현).
+@MainActor
+public protocol AppleReauthorizing: AnyObject {
+    /// Apple 시스템 시트를 띄워(scope 없음) 새 `authorizationCode`(5분 유효)를 받는다. 취소하면 `AuthError.cancelled`.
+    func authorizationCode() async throws -> String
 }
 
 /// Port: 카카오 SDK (App 레이어가 구현 — 카카오 SDK는 App에서만 import).
@@ -110,9 +120,12 @@ public actor FakeAccountService: AccountService {
         return SavedImportResult(imported: imported, skippedUnknown: skipped)
     }
 
-    public func deleteAccount(accessToken: String) async throws {
+    public private(set) var lastAppleAuthorizationCode: String?
+
+    public func deleteAccount(accessToken: String, appleAuthorizationCode: String?) async throws {
         saved = []
         deleted = true
+        lastAppleAuthorizationCode = appleAuthorizationCode
     }
 }
 
@@ -176,6 +189,22 @@ public final class FakeKakaoLogin: KakaoLoginProviding {
     public func unlink() async { unlinkCount += 1 }
 }
 
+/// Apple 재인증을 흉내 낸다. `result`가 실패면 그 오류(취소 = `AuthError.cancelled`).
+@MainActor
+public final class FakeAppleReauth: AppleReauthorizing {
+    public var result: Result<String, AuthError>
+    public private(set) var requestCount = 0
+
+    public init(result: Result<String, AuthError> = .success("fake-apple-authorization-code")) {
+        self.result = result
+    }
+
+    public func authorizationCode() async throws -> String {
+        requestCount += 1
+        return try result.get()
+    }
+}
+
 // MARK: - 로그아웃 · 탈퇴 (S6)
 
 /// 설정(S6)의 로그아웃·회원 탈퇴. 기기 정리 순서를 한곳에 둔다.
@@ -184,11 +213,16 @@ public final class AccountActions {
     public let library: SavedLibrary
     private let account: any AccountService
     private let kakao: any KakaoLoginProviding
+    private let apple: any AppleReauthorizing
 
-    public init(library: SavedLibrary, account: any AccountService, kakao: any KakaoLoginProviding) {
+    public init(
+        library: SavedLibrary, account: any AccountService, kakao: any KakaoLoginProviding,
+        apple: any AppleReauthorizing
+    ) {
         self.library = library
         self.account = account
         self.kakao = kakao
+        self.apple = apple
     }
 
     public var auth: AuthService { library.auth }
@@ -200,14 +234,22 @@ public final class AccountActions {
         await auth.signOut()
     }
 
-    /// 회원 탈퇴: 카카오면 앱 연결 끊기(실패해도 진행) → `DELETE /v1/me` → 세션·캐시·기기 로컬 저장 모두 삭제.
+    /// 회원 탈퇴: Apple이면 재인증으로 authorization code 받기(취소하면 `AuthError.cancelled`로 멈춤, 아무것도 안 지움),
+    /// 카카오면 앱 연결 끊기(실패해도 진행) → `DELETE /v1/me`(Apple은 코드와 함께 — 서버가 토큰 철회) →
+    /// 세션·캐시·기기 로컬 저장 모두 삭제.
     /// 실패하면 아무것도 지우지 않고 던진다(세션 만료면 `AuthError.sessionExpired` — 세션은 이미 지워짐).
     public func deleteAccount() async throws {
-        if auth.provider == .kakao { await kakao.unlink() }
-        // TODO(herezi-api#72): Apple 로그인 사용자는 탈퇴 때 Sign in with Apple 토큰을 철회해야 한다(서버 revoke,
-        // 필요하면 여기서 Apple 재인증으로 authorization code를 받아 함께 보낸다). 지금은 서버가 철회하지 않는다.
+        var code: String?
+        switch auth.provider {
+        case .apple: code = try await apple.authorizationCode()
+        case .kakao: await kakao.unlink()
+        case nil: break
+        }
+        let appleCode = code
         let account = self.account
-        try await auth.authorized { try await account.deleteAccount(accessToken: $0) }
+        try await auth.authorized {
+            try await account.deleteAccount(accessToken: $0, appleAuthorizationCode: appleCode)
+        }
         library.clearLocalData(includingLegacy: true)
         auth.clear()
     }
