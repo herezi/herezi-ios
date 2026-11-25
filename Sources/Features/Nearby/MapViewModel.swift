@@ -224,6 +224,20 @@ public final class MapViewModel: SpotFilterControlling {
         return true
     }
 
+    /// 포그라운드 복귀: 지역 파일을 확인하고(마지막 확인이 1시간 넘었을 때만) 같은 영역을 기기 데이터로 다시 계산한다.
+    /// 기기 계산이라 바로 끝나므로 로딩 표시("찾는 중…")·카메라 이동 없이 핀만 바꾼다.
+    public func refreshOnForeground() async {
+        guard state == .loaded, let bounds = searchedBounds else { return }
+        _ = try? await service.refreshData(force: false)
+        guard searchedBounds == bounds,
+            let result = try? await service.spotsInBounds(
+                SpotMapQuery(bounds: bounds, categories: selectedCategories, when: when, freeOnly: freeOnly)),
+            searchedBounds == bounds
+        else { return }
+        spots = result.items
+        if let selectedSpotID, !spots.contains(where: { $0.id == selectedSpotID }) { deselect() }
+    }
+
     public func retry() async {
         await search(searchedBounds ?? visibleBounds ?? .around(.seoulCityHall, radiusMeters: Self.initialRadiusMeters))
     }

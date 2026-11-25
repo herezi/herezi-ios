@@ -147,7 +147,7 @@ public struct NearbyView: View {
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
         .contentMargins(.bottom, 80, for: .scrollContent)
-        .refreshable { await viewModel.reload() }
+        .refreshable { await viewModel.refresh() }
     }
 
     @ViewBuilder private var listFooter: some View {

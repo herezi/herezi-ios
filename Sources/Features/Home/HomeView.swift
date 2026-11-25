@@ -37,7 +37,7 @@ public struct HomeView: View {
         .toolbar(.hidden, for: .navigationBar)
         .refreshable { await viewModel.reload() }
         .task {
-            if viewModel.state == .idle { await viewModel.reload() }
+            if viewModel.state == .idle { await viewModel.start() }
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { Task { await viewModel.reloadIfStale() } }

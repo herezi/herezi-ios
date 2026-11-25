@@ -18,6 +18,7 @@ public struct NearbyMapScreen: View {
     let onSearch: (() -> Void)?
     let onShowList: ((MapListRequest) -> Void)?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
 
     /// 시트 접힘 높이 (DESIGN §6.5).
     static let collapsedHeight: CGFloat = 88
@@ -53,6 +54,9 @@ public struct NearbyMapScreen: View {
         .background(Color.hz.bgPrimary)
         .toolbar(.hidden, for: .navigationBar)
         .task { await viewModel.start() }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { Task { await viewModel.refreshOnForeground() } }
+        }
         .onChange(of: viewModel.state) { _, state in
             if state == .loaded {
                 AccessibilityNotification.Announcement(viewModel.sheetTitle).post()

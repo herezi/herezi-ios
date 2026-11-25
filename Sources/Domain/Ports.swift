@@ -1,20 +1,21 @@
 import Foundation
 
-/// Parameters for `GET /v1/spots`.
+/// 근처 목록·검색 조회 조건. 기기 안에서 지역 데이터로 계산한다(`SpotQueryEngine.nearby`) — 서버로 보내지 않는다(#37).
 public struct SpotQuery: Hashable, Sendable {
     public var coordinate: Coordinate
     public var radiusMeters: Int
     /// Empty set means "all categories".
     public var categories: Set<SpotCategory>
     public var when: WhenFilter
-    /// `free=true` — 무료 항목만. false면 파라미터를 보내지 않는다.
+    /// 무료 항목만.
     public var freeOnly: Bool
-    /// `q` — 키워드 검색(제목·장소명·주소 부분 일치). 앞뒤 공백을 자른 뒤 비어 있으면 보내지 않는다.
+    /// 키워드(제목·장소명·주소, 대소문자 무시 부분 일치). 앞뒤 공백을 자른 뒤 비어 있으면 거르지 않는다.
     public var keyword: String?
+    /// 다음 페이지 위치(엔진이 준 `nextCursor`).
     public var cursor: String?
     public var limit: Int
 
-    /// 계약상 `q`의 최대 글자 수.
+    /// 키워드 최대 글자 수(서버 `q` 규칙과 같음).
     public static let keywordMaxLength = 50
 
     public init(
@@ -37,7 +38,7 @@ public struct SpotQuery: Hashable, Sendable {
         self.limit = limit
     }
 
-    /// 서버에 보낼 `q` 값. 앞뒤 공백을 자르고 50자로 자른다. 비면 nil.
+    /// 거를 키워드. 앞뒤 공백을 자르고 50자로 자른다. 비면 nil.
     public var normalizedKeyword: String? {
         guard let trimmed = keyword?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else {
             return nil
@@ -46,15 +47,15 @@ public struct SpotQuery: Hashable, Sendable {
     }
 }
 
-/// Parameters for `GET /v1/spots/map` (지도 영역 조회). 클러스터링은 앱에서 한다.
+/// 지도 영역 조회 조건. 기기 안에서 계산한다(`SpotQueryEngine.inBounds`). 클러스터링도 앱에서 한다.
 public struct SpotMapQuery: Hashable, Sendable {
     public var bounds: CoordinateBounds
     /// Empty set means "all categories".
     public var categories: Set<SpotCategory>
     public var when: WhenFilter
-    /// `free=true` — 무료 항목만. false면 파라미터를 보내지 않는다.
+    /// 무료 항목만.
     public var freeOnly: Bool
-    /// 1...500, 서버 기본 200.
+    /// 최대 개수(S2: 200). 넘치면 `truncated`.
     public var limit: Int
 
     public init(
@@ -72,17 +73,22 @@ public struct SpotMapQuery: Hashable, Sendable {
     }
 }
 
-/// Port: where spots come from. Implemented by `Networking.LiveSpotsService` (HTTP)
-/// and `FakeSpotsService` (previews/tests). Features depend on this protocol only.
+/// Port: where spots come from. 앱은 `LocalSpotsService`(지역 데이터 + 기기 계산, #37), 미리보기·테스트는
+/// `FakeSpotsService`. Features depend on this protocol only. 사용자 좌표는 이 포트 밖(서버)으로 나가지 않는다.
 public protocol SpotsService: Sendable {
     func spots(_ query: SpotQuery) async throws -> SpotPage
     /// 지도 영역(bbox) 안의 항목. 영역 중심에서 가까운 순, 끝난 항목은 없다.
     func spotsInBounds(_ query: SpotMapQuery) async throws -> SpotMap
     /// 상세. 끝난 항목도 반환한다(`isEnded == true`).
     func spot(id: String) async throws -> Spot
-    /// `GET /v1/geo/reverse` — 좌표 → 위치명 label("중구 태평로1가"). 결과가 없으면 빈 문자열.
-    /// 서버에 네이버 키가 없거나(501) 네이버 호출이 실패하면(502) 던진다 — 앱은 OS 지오코더로 대체한다.
-    func reverseGeocode(_ coordinate: Coordinate) async throws -> String
+    /// 기기 데이터를 서버와 맞춘다(지역 파일 `If-None-Match`). 새 데이터를 받았으면 true.
+    /// `force == false`면 최근에 확인했을 때 요청하지 않는다. 받지 못하면 던지지만 기존 데이터는 그대로 쓸 수 있다.
+    func refreshData(force: Bool) async throws -> Bool
+}
+
+extension SpotsService {
+    /// 동기화할 데이터가 없는 구현(가짜 서비스 등)은 아무것도 하지 않는다.
+    public func refreshData(force: Bool) async throws -> Bool { false }
 }
 
 /// 포트가 던지는 도메인 오류. 어댑터(HTTP 등)는 자기 오류를 이것으로 바꿔 Features가 구분할 수 있게 한다.
@@ -114,31 +120,10 @@ public protocol LocationPermissionProviding: AnyObject {
     func requestWhenInUse() async -> LocationPermission
 }
 
-/// Port: 좌표 → 짧은 위치명("중구 태평로1가"). App 레이어가 역지오코딩으로 구현한다. 실패하면 nil.
+/// Port: 좌표 → 짧은 위치명("중구 태평로1가"). App 레이어가 기기 지오코더(CLGeocoder)로 구현한다 — 서버로 보내지 않는다. 실패하면 nil.
 @MainActor
 public protocol PlaceNaming {
     func placeName(for coordinate: Coordinate) async -> String?
-}
-
-/// `PlaceNaming` 조합: 서버 역지오코딩(네이버, 구·동까지 나옴)을 먼저 쓰고,
-/// 실패하거나 빈 label이면 `fallback`(App의 OS 지오코더)을 쓴다 (herezi-api#35).
-@MainActor
-public struct ServerPlaceNaming: PlaceNaming {
-    private let service: any SpotsService
-    private let fallback: any PlaceNaming
-
-    public init(service: any SpotsService, fallback: any PlaceNaming) {
-        self.service = service
-        self.fallback = fallback
-    }
-
-    public func placeName(for coordinate: Coordinate) async -> String? {
-        if let label = try? await service.reverseGeocode(coordinate) {
-            let trimmed = label.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !trimmed.isEmpty { return trimmed }
-        }
-        return await fallback.placeName(for: coordinate)
-    }
 }
 
 /// Port: the user's current location. Implemented in the App layer with CoreLocation.

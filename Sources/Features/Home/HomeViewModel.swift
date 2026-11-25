@@ -2,8 +2,8 @@ import Domain
 import Foundation
 import Observation
 
-/// 홈(S1) 상태·로직. 위치를 찾고(5초, 실패하면 서울시청) `when=week&limit=100`을 한 번 불러
-/// `HomeFeed.build`로 섹션을 나눈다.
+/// 홈(S1) 상태·로직. 위치를 찾고(5초, 실패하면 서울시청) 기기에 받아 둔 지역 데이터에서 `when=week`·3km·가까운 100개를
+/// 골라(`SpotsService` — 좌표는 서버로 가지 않는다, #37) `HomeFeed.build`로 섹션을 나눈다.
 @MainActor
 @Observable
 public final class HomeViewModel {
@@ -53,11 +53,45 @@ public final class HomeViewModel {
     /// 기준 시각 고정용 시계 (섹션을 만든 순간).
     public private(set) var clock = HomeClock(now: Date())
 
-    /// 위치를 다시 확인하고 재조회한다(당겨서 새로고침도 같음).
+    /// 첫 진입: 기기 데이터가 있으면 그것으로 먼저 그리고, 지역 파일을 확인한다(앱 실행 후 첫 확인은 항상, 대부분 304).
+    public func start() async {
+        await load(forceSync: false)
+    }
+
+    /// 당겨서 새로고침·다시 시도·위치 허용 직후: 위치를 다시 확인하고 지역 파일을 확인(`If-None-Match`)한 뒤 다시 계산.
     public func reload() async {
+        await load(forceSync: true)
+    }
+
+    private func load(forceSync: Bool) async {
         let hadData = feed != nil
         if !hadData { state = .loading }
         let origin = await resolveLocation()
+        // 1) 기기 데이터로 먼저 그린다(없으면 이때 처음 받는다).
+        var shown = await rebuild(origin: origin)
+        // 2) 지역 파일 확인. 바뀌었으면(또는 1에서 못 그렸으면) 다시 계산.
+        var syncFailed = false
+        do {
+            if try await service.refreshData(force: forceSync) || !shown {
+                shown = await rebuild(origin: origin)
+            }
+        } catch {
+            syncFailed = true
+        }
+        if shown {
+            state = .loaded
+            // 기기 데이터로 그렸지만 최신을 못 받음 — 사용자가 새로고침했을 때만 알린다(S1 '새로고침 오류').
+            if syncFailed && forceSync && hadData { toastMessage = "최신 정보를 불러오지 못했어요" }
+        } else if hadData {
+            state = .loaded
+            toastMessage = "최신 정보를 불러오지 못했어요"
+        } else {
+            state = .failed
+        }
+    }
+
+    /// 지금 위치·데이터로 섹션을 다시 만든다. 데이터가 없어 못 만들면 false.
+    private func rebuild(origin: Coordinate) async -> Bool {
         do {
             let page = try await service.spots(
                 SpotQuery(coordinate: origin, radiusMeters: Self.radiusMeters, when: .week, limit: Self.limit))
@@ -65,21 +99,19 @@ public final class HomeViewModel {
             clock = HomeClock(now: current)
             feed = HomeFeed.build(spots: page.items, now: current, hasMore: page.nextCursor != nil)
             loadedAt = current
-            state = .loaded
+            return true
         } catch {
-            if hadData {
-                state = .loaded
-                toastMessage = "최신 정보를 불러오지 못했어요"
-            } else {
-                state = .failed
-            }
+            return false
         }
     }
 
-    /// 백그라운드에서 15분 넘게 있다 돌아오면 재조회.
+    /// 포그라운드 복귀: 지역 파일은 마지막 확인이 1시간(서버 max-age) 넘었을 때만 확인하고, 데이터가 바뀌었거나
+    /// 마지막 계산이 15분 넘었으면 같은 위치로 다시 계산한다(위치 재조회는 하지 않음 — S1 인터랙션).
     public func reloadIfStale() async {
-        guard let loadedAt, now().timeIntervalSince(loadedAt) > 15 * 60 else { return }
-        await reload()
+        guard state == .loaded, let coordinate else { return }
+        let changed = (try? await service.refreshData(force: false)) ?? false
+        let stale = loadedAt.map { now().timeIntervalSince($0) > 15 * 60 } ?? true
+        if changed || stale { _ = await rebuild(origin: coordinate) }
     }
 
     private func resolveLocation() async -> Coordinate {

@@ -84,6 +84,31 @@ public struct APIClient: Sendable {
 }
 
 extension APIClient {
+    /// 조건부 GET. `If-None-Match`를 직접 붙이고 URLCache를 거치지 않는다(304를 그대로 받기 위해).
+    /// 2xx·304면 (본문, 응답)을 돌려주고, 아니면 `APIError.server`. gzip은 URLSession이 자동으로 푼다.
+    func conditionalGet(path: String, ifNoneMatch etag: String?) async throws -> (Data, HTTPURLResponse) {
+        var request = URLRequest(url: try makeURL(path: path))
+        request.httpMethod = "GET"
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        if let etag { request.setValue(etag, forHTTPHeaderField: "If-None-Match") }
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await session.data(for: request)
+        } catch {
+            throw APIError.transport(error.localizedDescription)
+        }
+        guard let http = response as? HTTPURLResponse else { throw APIError.transport("not HTTP") }
+        guard (200..<300).contains(http.statusCode) || http.statusCode == 304 else {
+            let body = try? JSONDecoder.herezi.decode(ErrorDTO.self, from: data)
+            throw APIError.server(status: http.statusCode, code: body?.code, message: body?.message)
+        }
+        return (data, http)
+    }
+}
+
+extension APIClient {
     /// 경로 세그먼트 하나에 허용되는 문자(RFC 3986 pchar). `/`·`?`·`#`·`%` 등은 인코딩된다.
     static let pathSegmentAllowed = CharacterSet.alphanumerics.intersection(
         CharacterSet(charactersIn: Unicode.Scalar(0)..<Unicode.Scalar(128))
