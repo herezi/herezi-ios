@@ -199,7 +199,15 @@ targets:
         UIRequiresFullScreen: true
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
-        UILaunchScreen: {}
+        # 런치 화면: 흰 배경 가운데 두리번 로고 마크(88pt 벡터 PDF, .github/assets/logo.svg에서 변환). 글자 없음.
+        # 앱이 라이트 전용(.preferredColorScheme(.light))이라 LaunchBackground는 다크 모드에서도 흰색.
+        UILaunchScreen:
+          UIImageName: LaunchLogo
+          UIColorName: LaunchBackground
+          UIImageRespectsSafeAreaInsets: false
+        # 수출 규정: HTTPS·OS 표준 암호화(Sign in with Apple, 키체인)만 쓰므로 면제 대상.
+        # 업로드마다 App Store Connect가 암호화 질문을 하지 않게 한다.
+        ITSAppUsesNonExemptEncryption: false
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
         NSLocationWhenInUseUsageDescription: 지금 내 주변의 축제·공연·전시를 보여드리기 위해 위치를 사용해요.
         HereziAPIBaseURL: $(HEREZI_API_BASE_URL)
