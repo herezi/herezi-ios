@@ -44,6 +44,7 @@ public final class DeleteAccountViewModel {
     public static let notice = "같은 계정으로 다시 가입할 수 있지만, 저장한 볼거리는 돌아오지 않아요."
     public static let finalTitle = "정말 탈퇴할까요?"
     public static let finalMessage = "저장한 볼거리와 계정 정보가 바로 지워져요."
+    public static let appleCancelledMessage = "Apple 확인을 취소해서 탈퇴하지 않았어요."
 
     /// 시스템 확인 대화상자에서 **탈퇴**.
     public func delete() async {
@@ -52,6 +53,10 @@ public final class DeleteAccountViewModel {
         do {
             try await actions.deleteAccount()
             phase = .done
+        } catch AuthError.cancelled {
+            // Apple 재인증 시트에서 취소 — 탈퇴를 멈춘다(아무것도 지우지 않음).
+            phase = .confirm
+            toastMessage = Self.appleCancelledMessage
         } catch AuthError.sessionExpired {
             // 세션이 만료됐으면 다시 로그인하게 하고 이 화면에 머문다(대기 동작 없음 — 사용자가 다시 탈퇴하기).
             phase = .confirm

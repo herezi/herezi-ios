@@ -207,4 +207,30 @@ struct AuthServiceTests {
             try await auth.signIn(provider: .kakao, idToken: "t", nonce: nil)
         }
     }
+
+    @Test func 탈퇴_요청은_Apple_코드를_본문에_싣고_카카오는_본문_없음() async throws {
+        let log = RequestLog()
+        let (_, account, _) = make { request in
+            log.append(request)
+            return (204, Data())
+        }
+        try await account.deleteAccount(accessToken: "access", appleAuthorizationCode: "apple-code")
+        try await account.deleteAccount(accessToken: "access", appleAuthorizationCode: nil)
+
+        let apple = log.requests[0]
+        #expect(apple.httpMethod == "DELETE")
+        #expect(apple.url?.path == "/v1/me")
+        #expect(apple.value(forHTTPHeaderField: "Content-Type") == "application/json")
+        #expect(log.json(0)?["apple_authorization_code"] as? String == "apple-code")
+        #expect(log.requests[1].httpBody == nil)
+    }
+
+    @Test func 탈퇴_apple_reauth_required는_재인증_필요_오류() async {
+        let (_, account, _) = make { _ in
+            (400, Data(#"{"code":"apple_reauth_required","message":"sign in with Apple again"}"#.utf8))
+        }
+        await #expect(throws: AccountError.appleReauthRequired) {
+            try await account.deleteAccount(accessToken: "access", appleAuthorizationCode: "expired")
+        }
+    }
 }

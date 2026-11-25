@@ -6,6 +6,7 @@
 #  3) 계약의 /v1 paths 중 deprecated 가 아닌 것을 Networking(Sources/Networking/*.swift)이 모두 부르는지 (경로 변수 이름은 무시)
 #  4) deprecated 경로(좌표를 받는 /v1/spots 근처·/v1/spots/map·/v1/geo/reverse — herezi-api ADR 0004)는 일부러 부르지 않는다.
 #     Networking에 남아 있으면 실패한다 (앱은 사용자 좌표를 서버로 보내지 않는다, 이슈 #37).
+#  5) 웹 전용 경로(공지사항 /v1/notices* — 웹 공지 페이지용 API, 앱은 인앱 브라우저로 웹 페이지를 연다. herezi-api#80)는 3)에서 뺀다.
 # 계약을 바꾸려면 herezi-api에서 먼저 바꾸고 `make sync-api` 후 코드를 맞춘다.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -81,7 +82,8 @@ spec_path_flags=$(awk '
   in_paths && p != "" && /^      deprecated: true/ { dep = 1 }
   END { if (p != "") print p, dep }
 ' "$spec" | sed -E 's/\{[^}]*\}/{}/g')
-spec_paths=$(echo "$spec_path_flags" | awk '$2 == 0 { print $1 }' | sort -u)
+web_only_paths='^/v1/notices(/\{[^}]*\})?$'
+spec_paths=$(echo "$spec_path_flags" | awk '$2 == 0 { print $1 }' | grep -vE "$web_only_paths" | sort -u)
 deprecated_paths=$(echo "$spec_path_flags" | awk '$2 == 1 { print $1 }' | sort -u)
 swift_paths=$(grep -ohE 'path: "[^"]+"' Sources/Networking/*.swift \
   | sed -E 's/path: "(.*)"/\1/; s/\\\([^)]*\)\)?/{}/g' | sort -u)

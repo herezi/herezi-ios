@@ -46,12 +46,15 @@ public struct LiveAccountService: AccountService {
         }
     }
 
-    public func deleteAccount(accessToken: String) async throws {
-        try await mapped { try await client.send("DELETE", path: "/v1/me", bearer: accessToken) }
+    public func deleteAccount(accessToken: String, appleAuthorizationCode: String?) async throws {
+        let body = try appleAuthorizationCode.map {
+            try JSONEncoder().encode(DeleteMeRequestDTO(appleAuthorizationCode: $0))
+        }
+        try await mapped { try await client.send("DELETE", path: "/v1/me", bearer: accessToken, body: body) }
     }
 
     /// HTTP 오류 → 도메인 오류. 401 → `AuthError.unauthorized`(리프레시 후 재시도), 503 → `AuthError.unavailable`
-    /// (로그아웃하지 않음), 409 `saved_limit_exceeded` → `AccountError.savedLimitExceeded`, 404 → `notFound`.
+    /// (로그아웃하지 않음), 400 `apple_reauth_required` → `AccountError.appleReauthRequired`, 409 `saved_limit_exceeded` → `AccountError.savedLimitExceeded`, 404 → `notFound`.
     @discardableResult
     private func mapped<T>(_ request: () async throws -> T) async throws -> T {
         do {
@@ -66,6 +69,7 @@ public struct LiveAccountService: AccountService {
         case .server(status: 401, _, _): AuthError.unauthorized
         case .server(status: 503, _, _): AuthError.unavailable
         case .server(status: 409, _, _): AccountError.savedLimitExceeded
+        case .server(status: 400, "apple_reauth_required", _): AccountError.appleReauthRequired
         case .server(status: 404, _, _): AccountError.notFound
         case .transport: AccountError.offline
         case .server, .invalidURL, .decoding: AccountError.server
