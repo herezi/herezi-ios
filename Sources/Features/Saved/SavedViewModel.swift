@@ -2,42 +2,90 @@ import Domain
 import Foundation
 import Observation
 
-/// S4 저장 목록의 상태·로직. 저장소(`SavedSpotsStore`)는 기기 로컬, 화면에 들어올 때마다 상세를 다시 받아 갱신한다.
+/// S4 저장 목록의 상태·로직 (herezi-api docs/design/screens/S4-saved.md).
+/// 저장은 계정에 한다(`SavedLibrary` — `GET/PUT/DELETE /v1/me/saved`). 로그인 전에는 목록 대신 로그인 안내.
 @MainActor
 @Observable
 public final class SavedViewModel {
-    /// 동시에 다시 받는 개수 (S4 스펙: 동시 4개).
-    public static let refreshConcurrency = 4
+    /// 본문 상태 (S4 "상태" 표).
+    public enum Content: Equatable, Sendable {
+        /// 로그인 전 — `SignInPrompt`.
+        case loggedOut
+        /// 첫 로딩(캐시 없음)·첫 로그인 옮기기 중 — 스켈레톤.
+        case loading
+        /// 불러오기 오류(캐시 없음).
+        case failed
+        /// 로그인 후 0개.
+        case empty
+        case list
+    }
+
+    /// 토스트. `undo`면 "되돌리기" 버튼을 붙인다(4초).
+    public struct Toast: Equatable, Sendable {
+        public let id = UUID()
+        public let message: String
+        public let undo: Bool
+    }
 
     public private(set) var isEditing = false
     public private(set) var selection: Set<String> = []
-    public var toastMessage: String?
+    public var toast: Toast?
     /// 마지막으로 지운 항목 (되돌리기용).
     public private(set) var lastRemoved: [SavedSpot] = []
 
-    private let store: SavedSpotsStore
-    private let service: any SpotsService
+    private let library: SavedLibrary
     private let origin: Coordinate?
     private let now: @Sendable () -> Date
 
     /// - Parameter origin: 현재 위치를 알면 거리 계산에 쓴다. 모르면 nil(카드에 장소명).
-    public init(
-        store: SavedSpotsStore, service: any SpotsService, origin: Coordinate? = nil,
-        now: @escaping @Sendable () -> Date = { Date() }
-    ) {
-        self.store = store
-        self.service = service
+    public init(library: SavedLibrary, origin: Coordinate? = nil, now: @escaping @Sendable () -> Date = { Date() }) {
+        self.library = library
         self.origin = origin
         self.now = now
     }
 
-    public var isEmpty: Bool { store.items.isEmpty }
+    public var content: Content {
+        guard library.isLoggedIn else { return .loggedOut }
+        if library.items.isEmpty {
+            if library.isMigrating { return .loading }
+            switch library.state {
+            case .idle, .loading: return .loading
+            case .failed: return .failed
+            case .loaded: return .empty
+            }
+        }
+        return .list
+    }
+
+    /// 편집 버튼은 로그인 상태이고 항목이 있을 때만.
+    public var canEdit: Bool { content == .list }
+
+    // MARK: 로그인 전
+
+    public static let signInTitle = "로그인하면 저장할 수 있어요"
+
+    /// 기기 로컬 저장(이전 버전)이 남아 있으면 개수 안내로 바꾼다.
+    public var signInMessage: String {
+        let count = library.legacyCount
+        return count > 0
+            ? "이 기기에 저장한 볼거리 \(count)개가 있어요. 로그인하면 계정으로 옮겨 드려요."
+            : "저장한 볼거리를 어느 기기에서든 다시 볼 수 있어요."
+    }
+
+    /// 로그인 버튼 → S7 시트(대기 동작 없음, 성공 후 이 화면이 목록으로 바뀜).
+    public func login() {
+        library.auth.requestLogin(.account)
+    }
+
+    // MARK: 목록
+
+    public var items: [SavedSpot] { library.items }
 
     /// 진행 중 — 저장 시각 최신순.
-    public var active: [SavedSpot] { store.items.filter { !isEnded($0.spot) } }
+    public var active: [SavedSpot] { items.filter { !isEnded($0.spot) } }
 
     /// 끝난 볼거리 — 저장 시각 최신순.
-    public var ended: [SavedSpot] { store.items.filter { isEnded($0.spot) } }
+    public var ended: [SavedSpot] { items.filter { isEnded($0.spot) } }
 
     public var endedHeader: String { "끝난 볼거리 \(ended.count)" }
 
@@ -55,67 +103,40 @@ public final class SavedViewModel {
         origin.map { $0.distance(to: spot.coordinate) }
     }
 
-    /// 각 항목을 `GET /v1/spots/{id}`로 다시 받아 스냅샷을 갱신한다. 404는 종료로 표시, 그 밖의 오류는 조용히 무시.
-    public func refresh() async {
-        let snapshots = store.items.map(\.spot)
-        guard !snapshots.isEmpty else { return }
-        let service = self.service
-        let results = await withTaskGroup(of: (Spot, Result<Spot, any Error>).self) { group in
-            var collected: [(Spot, Result<Spot, any Error>)] = []
-            var next = 0
-            while next < min(Self.refreshConcurrency, snapshots.count) {
-                let snapshot = snapshots[next]
-                group.addTask { await Self.fetch(snapshot, from: service) }
-                next += 1
-            }
-            for await result in group {
-                collected.append(result)
-                if next < snapshots.count {
-                    let snapshot = snapshots[next]
-                    group.addTask { await Self.fetch(snapshot, from: service) }
-                    next += 1
-                }
-            }
-            return collected
-        }
-        for (snapshot, result) in results {
-            switch result {
-            case .success(let fresh):
-                store.update(fresh)
-            case .failure(SpotsServiceError.notFound):
-                store.update(snapshot.copy(isEnded: true))
-            case .failure:
-                break
-            }
-        }
-    }
-
-    private nonisolated static func fetch(
-        _ snapshot: Spot, from service: any SpotsService
-    ) async -> (Spot, Result<Spot, any Error>) {
+    /// 화면에 들어올 때(조용히)·당겨서 새로고침(`userInitiated`). 캐시가 있으면 캐시로 먼저 그려져 있다.
+    public func refresh(userInitiated: Bool = false) async {
+        guard library.isLoggedIn else { return }
         do {
-            return (snapshot, .success(try await service.spot(id: snapshot.id)))
+            try await library.refresh()
+        } catch AuthError.sessionExpired {
+            show("다시 로그인해 주세요")
         } catch {
-            return (snapshot, .failure(error))
+            if userInitiated && !items.isEmpty { show("최신 목록을 불러오지 못했어요") }
         }
     }
 
     // MARK: 지우기
 
     /// 밀어서 삭제 → 토스트 "저장을 취소했어요" + 되돌리기.
-    public func delete(_ id: String) {
-        remove([id])
+    public func delete(_ id: String) async {
+        await remove([id])
     }
 
-    public func undo() {
-        store.restore(lastRemoved)
+    /// 되돌리기 → 다시 `PUT`.
+    public func undo() async {
+        let restored = lastRemoved
         lastRemoved = []
+        do {
+            try await library.restore(restored)
+        } catch {
+            show(SavedLibrary.message(for: error, fallback: "저장하지 못했어요. 다시 눌러 주세요."))
+        }
     }
 
     public var clearEndedPrompt: String { "끝난 볼거리 \(ended.count)개를 지울까요?" }
 
-    public func clearEnded() {
-        remove(Set(ended.map(\.id)))
+    public func clearEnded() async {
+        await remove(Set(ended.map(\.id)))
     }
 
     // MARK: 편집
@@ -131,16 +152,27 @@ public final class SavedViewModel {
 
     public var deleteSelectedTitle: String { "\(selection.count)개 지우기" }
 
-    public func deleteSelected() {
+    public func deleteSelected() async {
         guard !selection.isEmpty else { return }
-        remove(selection)
+        let ids = selection
         setEditing(false)
+        await remove(ids)
     }
 
-    private func remove(_ ids: Set<String>) {
-        let removed = store.remove(ids: ids)
-        guard !removed.isEmpty else { return }
-        lastRemoved = removed
-        toastMessage = "저장을 취소했어요"
+    private func remove(_ ids: Set<String>) async {
+        do {
+            let removed = try await library.remove(ids: ids)
+            guard !removed.isEmpty else { return }
+            lastRemoved = removed
+            toast = Toast(message: "저장을 취소했어요", undo: true)
+        } catch AuthError.sessionExpired {
+            show("다시 로그인해 주세요")
+        } catch {
+            show("지우지 못했어요. 잠시 후 다시 시도해 주세요.")
+        }
+    }
+
+    private func show(_ message: String) {
+        toast = Toast(message: message, undo: false)
     }
 }

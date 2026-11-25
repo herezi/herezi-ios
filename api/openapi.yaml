@@ -1,10 +1,15 @@
 openapi: 3.1.0
 info:
   title: Herezi API
-  version: 0.5.0
+  version: 0.7.0
   description: |
     Herezi 공개 API 계약. 이 파일이 서버·iOS·Android 사이의 단일 기준이다.
     변경 시 하위호환을 지키고, 앱 레포는 `make sync-api`로 이 파일을 가져간다.
+
+    인증: 조회 API(`/v1/spots*`, `/v1/geo/reverse`)는 인증 없이 쓴다. `/v1/me/*`만 로그인이 필요하다 —
+    앱이 카카오·Apple로 로그인해 받은 **Supabase 세션의 access token**을 `Authorization: Bearer <JWT>`로 보낸다
+    (TECH-PLAN.md §4.1). 401이면 세션을 리프레시해 한 번 다시 시도하고, 그래도 401이면 로그아웃 상태로 바꾼다.
+    503 `auth_unavailable`은 일시적이므로 로그아웃하지 않는다.
 servers:
   - url: http://localhost:8080
 paths:
@@ -155,7 +160,141 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
+  /v1/me/saved:
+    get:
+      operationId: listSaved
+      summary: 내 저장(찜) 목록 — 저장 시각 최신순
+      description: |
+        저장한 볼거리의 스팟 스냅샷을 저장 시각(`saved_at`) 최신순으로 돌려준다. 끝난 항목도 포함하고 `is_ended: true`로
+        표시한다(앱은 '끝난 볼거리' 섹션에 흐리게). 종료 후 90일이 지난 항목은 서버가 정리하므로 목록에서 빠진다.
+        사용자당 최대 500개. 다음 페이지는 `next_cursor`를 그대로 보낸다. 응답은 `Cache-Control: no-store`.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: cursor
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+      responses:
+        "200":
+          description: OK. 각 항목에 `saved_at`이 있다
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SpotPage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "503": { $ref: "#/components/responses/AuthUnavailable" }
+  /v1/me/saved:import:
+    post:
+      operationId: importSaved
+      summary: 기기 로컬 저장분을 계정으로 한 번에 옮기기 (최대 200개)
+      description: |
+        로그인 전(v1.3 이전 앱)에 기기에만 저장한 항목을 첫 로그인 때 옮긴다. 이미 저장된 항목은 그대로 두고(저장 시각 유지),
+        서버에 없는 항목(정리된 볼거리 등)은 건너뛰고 `skipped_unknown`에 센다. 중복 ID는 한 번으로 친다.
+        옮기면 500개를 넘는 경우 아무것도 저장하지 않고 409. 200이면 앱은 로컬 저장분을 모두 지워도 된다.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SavedImportRequest" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SavedImportResult" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "409": { $ref: "#/components/responses/SavedLimit" }
+        "503": { $ref: "#/components/responses/AuthUnavailable" }
+  /v1/me/saved/{spot_id}:
+    put:
+      operationId: saveSpot
+      summary: 저장 (멱등)
+      description: 이미 저장돼 있으면 아무것도 바꾸지 않고(저장 시각 유지) 204.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: spot_id, in: path, required: true, schema: { type: string, maxLength: 200 } }
+      responses:
+        "204": { description: 저장됨 }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404":
+          description: 없는 볼거리(정리됨 포함) (code=not_found)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409": { $ref: "#/components/responses/SavedLimit" }
+        "503": { $ref: "#/components/responses/AuthUnavailable" }
+    delete:
+      operationId: unsaveSpot
+      summary: 저장 취소 (멱등)
+      description: 저장돼 있지 않거나 없는 볼거리여도 204.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: spot_id, in: path, required: true, schema: { type: string, maxLength: 200 } }
+      responses:
+        "204": { description: 저장 취소됨 }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "503": { $ref: "#/components/responses/AuthUnavailable" }
+  /v1/me:
+    delete:
+      operationId: deleteMe
+      summary: 회원 탈퇴 — 저장 목록과 계정(Supabase 사용자)을 지운다
+      description: |
+        ① Supabase Auth Admin API로 사용자를 지우고(연결된 카카오·Apple 계정 정보 포함) ② 성공하면 저장 목록을 지운다.
+        ①이 실패하면 502이고 저장 목록은 그대로다. 앱은 같은 토큰으로 다시 시도하면 된다 — 이미 지워진 사용자는 성공으로 보고
+        남은 정리를 마친다(멱등). 204 뒤에 앱은 세션·캐시·기기 로컬 저장을 모두 지운다.
+        카카오 `unlink`는 앱이 먼저 한다. Apple 토큰 철회는 아직 서버에서 하지 않는다(후속 이슈).
+      security: [{ bearerAuth: [] }]
+      responses:
+        "204": { description: 탈퇴 완료 }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "500":
+          description: 계정은 지워졌으나 저장 목록 정리 실패 (code=internal). 같은 토큰으로 재시도
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "502":
+          description: Supabase 사용자 삭제 실패·타임아웃(10초) (code=upstream_error). 아무것도 지우지 않음
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "503": { $ref: "#/components/responses/AuthUnavailable" }
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Supabase Auth access token(카카오·Apple 로그인 후 받은 세션). 서버는 프로젝트 JWKS(ES256/RS256)로 서명을,
+        `iss`(`<SUPABASE_URL>/auth/v1`)·`aud`(`authenticated`)·`exp`를 확인하고 `sub`를 사용자 ID로 쓴다.
+  responses:
+    BadRequest:
+      description: 잘못된 파라미터·본문 (code=invalid_parameter)
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Unauthorized:
+      description: |
+        토큰 없음·형식 오류·서명 불일치·만료·발급자/대상 불일치 (code=unauthorized). `WWW-Authenticate: Bearer` 헤더가 붙는다.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    AuthUnavailable:
+      description: |
+        서버에 인증(또는 탈퇴용 서비스 키)이 설정되지 않음(code=auth_not_configured) 또는 검증 키(JWKS)를 일시적으로 받지 못함(code=auth_unavailable).
+        토큰 문제가 아니므로 앱은 로그아웃하지 않고 나중에 다시 시도한다.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    SavedLimit:
+      description: 저장 개수 한도(500개) 초과 (code=saved_limit_exceeded)
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
   schemas:
     Category:
       type: string
@@ -180,11 +319,12 @@ components:
         source_url: { type: string, format: uri }
         fetched_at: { type: string, format: date-time, description: 원본 소스에서 마지막으로 가져온 시각(앱의 "갱신 시각") }
         distance_m: { type: integer, description: "요청 위치로부터의 거리 (/v1/spots에서만)" }
+        saved_at: { type: string, format: date-time, description: "저장한 시각 (/v1/me/saved에서만)" }
         is_ended:
           type: boolean
           description: |
             응답 시각 기준으로 끝났는지(ends_at < now). 목록·지도는 끝난 항목을 반환하지 않으므로 항상 false.
-            상세(/v1/spots/{id})는 끝난 항목도 200으로 반환하고 true로 표시한다 — 앱은 '종료됨'으로 보여준다(찜 목록에서 흐리게).
+            상세(/v1/spots/{id})와 저장 목록(/v1/me/saved)은 끝난 항목도 반환하고 true로 표시한다 — 앱은 '종료됨'으로 보여준다(저장 목록에서 흐리게).
     SpotPage:
       type: object
       required: [items]
@@ -212,9 +352,28 @@ components:
           type: string
           description: 앱에 보여줄 위치명. area2 + " " + area3(빈 값은 생략), 둘 다 없으면 area1, 결과가 없으면 빈 문자열
           example: 중구 태평로1가
+    SavedImportRequest:
+      type: object
+      required: [spot_ids]
+      properties:
+        spot_ids:
+          type: array
+          minItems: 1
+          maxItems: 200
+          items: { type: string, minLength: 1, maxLength: 200 }
+    SavedImportResult:
+      type: object
+      required: [imported, skipped_unknown]
+      properties:
+        imported: { type: integer, description: 새로 저장한 수(이미 저장돼 있던 항목 제외) }
+        skipped_unknown: { type: integer, description: 서버에 없어 건너뛴 수(정리된 볼거리 등) }
     Error:
       type: object
       required: [code, message]
       properties:
-        code: { type: string }
+        code:
+          type: string
+          description: |
+            invalid_parameter · not_found · internal · not_configured · upstream_error(502) ·
+            unauthorized(401) · auth_not_configured(503) · auth_unavailable(503) · saved_limit_exceeded(409)
         message: { type: string }

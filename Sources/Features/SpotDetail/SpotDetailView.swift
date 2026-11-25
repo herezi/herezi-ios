@@ -46,7 +46,7 @@ public struct SpotDetailView: View {
                 VStack(spacing: HZSpace.s2) {
                     HZStateButton("주변 보기", action: onGoHome)
                     if viewModel.isSaved {
-                        Button("저장에서 지우기") { viewModel.removeFromSaved() }
+                        Button("저장에서 지우기") { Task { await viewModel.removeFromSaved() } }
                             .buttonStyle(HZTextButtonStyle())
                     }
                 }
@@ -271,7 +271,7 @@ public struct SpotDetailView: View {
                 }
                 .accessibilityLabel("공유")
                 Button {
-                    withAnimation(HZMotion.fast) { viewModel.toggleSave() }
+                    Task { await viewModel.toggleSave() }
                 } label: {
                     toolbarIcon(viewModel.isSaved ? "bookmark.fill" : "bookmark")
                 }
@@ -357,7 +357,7 @@ struct DetailSkeleton: View {
         SpotDetailView(
             viewModel: SpotDetailViewModel(
                 id: "sample-1", initial: SampleSpots.all[0], service: FakeSpotsService(),
-                saved: SavedSpotsStore(defaults: UserDefaults(suiteName: "preview")!)))
+                saved: .preview()))
     }
 }
 
@@ -366,6 +366,6 @@ struct DetailSkeleton: View {
         SpotDetailView(
             viewModel: SpotDetailViewModel(
                 id: SampleSpots.endedID, service: FakeSpotsService(),
-                saved: SavedSpotsStore(defaults: UserDefaults(suiteName: "preview")!)))
+                saved: .preview()))
     }
 }

@@ -4,6 +4,7 @@
 #  2) Features 는 Networking 을 import 하지 않는다 (Domain 포트에만 의존).
 #  4) DesignSystem 은 Domain·SwiftUI(·UIKit/SafariServices)만 쓴다 — Networking·MapUI·Feature* 금지.
 #  3) Domain 은 Foundation/Observation 외 프레임워크를 import 하지 않는다.
+#  5) 카카오 SDK(KakaoSDK*)는 Sources/App 에서만 import 한다 (Features는 Domain 포트 KakaoLoginProviding).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -15,6 +16,10 @@ report() {
 
 if hits=$(grep -rnE '^\s*(@testable\s+)?import\s+NMaps(Map|Geometry)\b' Sources --include='*.swift' | grep -v '^Sources/MapUI/'); then
   report "네이버 지도 SDK는 MapUI에서만 import 할 수 있습니다:"$'\n'"$hits"
+fi
+
+if hits=$(grep -rnE '^\s*(@preconcurrency\s+|@testable\s+)?import\s+KakaoSDK' Sources --include='*.swift' | grep -v '^Sources/App/'); then
+  report "카카오 SDK는 App에서만 import 할 수 있습니다 (Domain 포트 KakaoLoginProviding 사용):"$'\n'"$hits"
 fi
 
 if hits=$(grep -rnE '^\s*import\s+Networking\b' Sources/Features --include='*.swift'); then

@@ -23,11 +23,11 @@ public final class SpotDetailViewModel {
     public let usesFallbackLocation: Bool
 
     private let service: any SpotsService
-    private let saved: SavedSpotsStore
+    private let saved: SavedLibrary
     private let now: @Sendable () -> Date
 
     public init(
-        id: String, initial: Spot? = nil, service: any SpotsService, saved: SavedSpotsStore,
+        id: String, initial: Spot? = nil, service: any SpotsService, saved: SavedLibrary,
         usesFallbackLocation: Bool = false, now: @escaping @Sendable () -> Date = { Date() }
     ) {
         self.id = id
@@ -47,7 +47,6 @@ public final class SpotDetailViewModel {
             let distance: Int? = fresh.distanceMeters ?? spot?.distanceMeters
             spot = fresh.copy(distanceMeters: .some(distance))
             state = .loaded
-            saved.update(fresh)
         } catch SpotsServiceError.notFound {
             state = .notFound
         } catch {
@@ -64,20 +63,20 @@ public final class SpotDetailViewModel {
 
     public var isSaved: Bool { saved.isSaved(id) }
 
-    public func toggleSave() {
-        if isSaved {
-            saved.remove(ids: [id])
-            toastMessage = "저장을 취소했어요"
-        } else if let spot {
-            saved.save(spot, at: now())
-            toastMessage = "저장했어요"
-        }
+    /// 저장/취소 (낙관적, 계정). 로그인 전이면 로그인 시트를 띄우고 아이콘은 채우지 않는다(S7).
+    public func toggleSave() async {
+        guard let spot else { return }
+        if let message = await saved.toggle(spot) { toastMessage = message }
     }
 
     /// 404 화면의 "저장에서 지우기".
-    public func removeFromSaved() {
-        saved.remove(ids: [id])
-        toastMessage = "저장을 취소했어요"
+    public func removeFromSaved() async {
+        do {
+            try await saved.remove(ids: [id])
+            toastMessage = "저장을 취소했어요"
+        } catch {
+            toastMessage = SavedLibrary.message(for: error, fallback: "지우지 못했어요. 잠시 후 다시 시도해 주세요.")
+        }
     }
 
     // MARK: 표시용 값

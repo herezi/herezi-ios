@@ -13,6 +13,11 @@ packages:
   NMapsMap:
     url: https://github.com/navermaps/SPM-NMapsMap
     exactVersion: 3.24.1
+  # 카카오 로그인 (S7). OIDC id_token → Supabase Auth. 카카오 SDK는 App 타깃(KakaoLoginProvider)에서만 import.
+  # Alamofire(5.9+)를 의존성으로 함께 가져온다.
+  KakaoSDK:
+    url: https://github.com/kakao/kakao-ios-sdk
+    exactVersion: 2.30.0
 
 configFiles:
   Debug: Config/Base.xcconfig
@@ -139,6 +144,15 @@ targets:
       - target: Domain
       - target: DesignSystem
 
+  # S7 로그인 시트 (Sign in with Apple은 AuthenticationServices, 카카오는 Domain 포트 KakaoLoginProviding).
+  FeatureAuth:
+    templates: [Module]
+    sources: [Sources/Features/Auth]
+    dependencies:
+      - target: Domain
+      - target: DesignSystem
+      - sdk: AuthenticationServices.framework
+
   # Layer 3: composition root. Wires adapters into features.
   Herezi:
     type: application
@@ -161,7 +175,15 @@ targets:
       - target: FeatureSearch
       - target: FeatureSettings
       - target: FeatureOnboarding
+      - target: FeatureAuth
       - target: MapUI
+      # 카카오 로그인 SDK (정적 라이브러리)
+      - package: KakaoSDK
+        product: KakaoSDKCommon
+      - package: KakaoSDK
+        product: KakaoSDKAuth
+      - package: KakaoSDK
+        product: KakaoSDKUser
       # MapUI가 링크하는 동적 프레임워크를 앱 번들에 임베드한다 (없으면 실행 즉시 dyld 크래시).
       - package: NMapsMap
       - sdk: CoreLocation.framework
@@ -170,6 +192,9 @@ targets:
       properties:
         # 홈 화면에 보이는 이름
         CFBundleDisplayName: 히어지
+        # 한국어 앱. 시스템 UI(Sign in with Apple 버튼 "Apple로 계속하기", 카카오 SDK 화면)가 한국어로 나오게 한다.
+        CFBundleDevelopmentRegion: ko
+        CFBundleLocalizations: [ko]
         # 세로 전용 iPhone 앱. 멀티태스킹 회전 요구 경고를 없앤다.
         UIRequiresFullScreen: true
         CFBundleShortVersionString: $(MARKETING_VERSION)
@@ -181,6 +206,20 @@ targets:
         HereziUseFakeAPI: $(HEREZI_USE_FAKE_API)
         # Naver Cloud Platform Maps client ID (from Config/Secrets.xcconfig; empty is OK for build/test).
         NMFNcpKeyId: $(NAVER_MAPS_CLIENT_ID)
+        # 로그인 (S7, Config/Secrets.xcconfig — 비어 있어도 빌드·테스트는 된다. 비면 로그인만 실패).
+        KakaoNativeAppKey: $(KAKAO_NATIVE_APP_KEY)
+        SupabaseURL: $(SUPABASE_URL)
+        SupabasePublishableKey: $(SUPABASE_PUBLISHABLE_KEY)
+        # 카카오톡 로그인 후 앱으로 돌아오는 스킴 kakao{네이티브 앱 키}
+        CFBundleURLTypes:
+          - CFBundleTypeRole: Editor
+            CFBundleURLName: kakao
+            CFBundleURLSchemes:
+              - kakao$(KAKAO_NATIVE_APP_KEY)
+        # 카카오톡으로 로그인·공유 앱 실행 허용 목록 (Kakao iOS SDK 시작하기)
+        LSApplicationQueriesSchemes:
+          - kakaokompassauth
+          - kakaolink
         # 폴더 참조(Fonts/)로 번들되므로 경로에 폴더 이름을 붙인다.
         UIAppFonts:
           - Fonts/Pretendard-Regular.otf
@@ -189,6 +228,9 @@ targets:
           - Fonts/Pretendard-Bold.otf
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
+    entitlements:
+      # Sign in with Apple. 파일은 커밋(XcodeGen이 덮어쓰지 않도록 properties 없이 경로만).
+      path: Config/Herezi.entitlements
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.herezi.app
@@ -217,6 +259,7 @@ targets:
       - target: FeatureSearch
       - target: FeatureSettings
       - target: FeatureOnboarding
+      - target: FeatureAuth
       - target: MapUI
     settings:
       base:

@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # api/openapi.yaml(계약)과 Swift 코드가 어긋나지 않았는지 검사한다.
 #  1) components.schemas.Category enum == SpotCategory case 목록
-#  2) components.schemas.{Spot,SpotPage,SpotMap,GeoReverse} properties == 각 DTO CodingKeys 의 JSON 이름
-#  3) 계약의 paths 를 LiveSpotsService가 모두 부르는지
+#  2) components.schemas.{Spot,SpotPage,SpotMap,GeoReverse,SavedImportRequest,SavedImportResult} properties
+#     == 각 DTO CodingKeys 의 JSON 이름
+#  3) 계약의 paths 를 Networking(LiveSpotsService·LiveAccountService)이 모두 부르는지 (경로 변수 이름은 무시)
 # 계약을 바꾸려면 herezi-api에서 먼저 바꾸고 `make sync-api` 후 코드를 맞춘다.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -52,7 +53,8 @@ dto_keys() {
   ' Sources/Networking/DTOs.swift | sort
 }
 
-for pair in Spot:SpotDTO SpotPage:SpotPageDTO SpotMap:SpotMapDTO GeoReverse:GeoReverseDTO; do
+for pair in Spot:SpotDTO SpotPage:SpotPageDTO SpotMap:SpotMapDTO GeoReverse:GeoReverseDTO \
+  SavedImportRequest:SavedImportRequestDTO SavedImportResult:SavedImportResultDTO; do
   schema=${pair%%:*}
   dto=${pair##*:}
   spec_keys=$(schema_props "$schema")
@@ -67,13 +69,14 @@ for pair in Spot:SpotDTO SpotPage:SpotPageDTO SpotMap:SpotMapDTO GeoReverse:GeoR
   fi
 done
 
-# --- 경로: 계약의 /v1 paths ⊆ LiveSpotsService가 부르는 경로 ----------------------
-spec_paths=$(awk '/^paths:/ { in_paths = 1; next } in_paths && /^[a-z]/ { exit } in_paths && /^  \/v1\// { p = $1; sub(/:$/, "", p); print p }' "$spec" | sort)
-swift_paths=$(grep -oE 'path: "[^"]+"' Sources/Networking/LiveSpotsService.swift \
-  | sed -E 's/path: "(.*)"/\1/; s/\\\([^)]*\)/{id}/' | sort -u)
+# --- 경로: 계약의 /v1 paths ⊆ Networking이 부르는 경로 (경로 변수는 {}로 맞춘다) ----------------
+spec_paths=$(awk '/^paths:/ { in_paths = 1; next } in_paths && /^[a-z]/ { exit } in_paths && /^  \/v1\// { p = $1; sub(/:$/, "", p); print p }' "$spec" \
+  | sed -E 's/\{[^}]*\}/{}/g' | sort -u)
+swift_paths=$(grep -ohE 'path: "[^"]+"' Sources/Networking/LiveSpotsService.swift Sources/Networking/LiveAccountService.swift \
+  | sed -E 's/path: "(.*)"/\1/; s/\\\([^)]*\)\)?/{}/g' | sort -u)
 missing=$(comm -23 <(echo "$spec_paths") <(echo "$swift_paths"))
 if [[ -n "$missing" ]]; then
-  echo "check-api-drift: LiveSpotsService가 구현하지 않은 계약 경로:"
+  echo "check-api-drift: Networking이 구현하지 않은 계약 경로:"
   echo "$missing"
   fail=1
 fi

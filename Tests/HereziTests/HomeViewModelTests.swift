@@ -11,7 +11,7 @@ struct HomeViewModelTests {
     private func makeViewModel(
         service: any SpotsService = FakeSpotsService(spots: TestData.spots),
         location: any LocationProviding = FixedLocationProvider(),
-        name: String? = "중구 태평로1가", saved: SavedSpotsStore = SavedSpotsStore(defaults: freshDefaults())
+        name: String? = "중구 태평로1가", saved: SavedLibrary = makeLibrary()
     ) -> HomeViewModel {
         let now = self.now
         return HomeViewModel(
@@ -74,14 +74,23 @@ struct HomeViewModelTests {
     }
 
     @Test func 히어로_저장_토글() async {
-        let store = SavedSpotsStore(defaults: freshDefaults())
-        let viewModel = makeViewModel(saved: store)
+        let library = makeLibrary()
+        let viewModel = makeViewModel(saved: library)
         let spot = TestData.spots[0]
-        viewModel.toggleSave(spot)
+        await viewModel.toggleSave(spot)
         #expect(viewModel.isSaved(spot))
         #expect(viewModel.toastMessage == "저장했어요")
-        viewModel.toggleSave(spot)
-        #expect(!store.isSaved(spot.id))
+        await viewModel.toggleSave(spot)
+        #expect(!library.isSaved(spot.id))
+    }
+
+    @Test func 로그인_전_저장은_로그인_시트만_띄운다() async {
+        let library = makeLibrary(provider: nil)
+        let viewModel = makeViewModel(saved: library)
+        await viewModel.toggleSave(TestData.spots[0])
+        #expect(!viewModel.isSaved(TestData.spots[0]))
+        #expect(viewModel.toastMessage == nil)
+        #expect(library.auth.loginRequest?.purpose == .save)
     }
 
     @Test func 가로_카드_배지() {

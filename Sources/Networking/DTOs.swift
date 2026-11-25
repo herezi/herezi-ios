@@ -23,6 +23,8 @@ struct SpotDTO: Decodable, Sendable {
     let sourceURL: URL?
     let fetchedAt: Date
     let distanceMeters: Int?
+    /// 저장 시각 (`/v1/me/saved`에서만).
+    let savedAt: Date?
     let isEnded: Bool
 
     enum CodingKeys: String, CodingKey {
@@ -42,6 +44,7 @@ struct SpotDTO: Decodable, Sendable {
         case sourceURL = "source_url"
         case fetchedAt = "fetched_at"
         case distanceMeters = "distance_m"
+        case savedAt = "saved_at"
         case isEnded = "is_ended"
     }
 
@@ -68,6 +71,17 @@ struct SpotPageDTO: Decodable, Sendable {
 
     func toDomain() -> SpotPage {
         SpotPage(items: items.compactMap { $0.toDomain() }, nextCursor: nextCursor)
+    }
+}
+
+extension SpotPageDTO {
+    /// `GET /v1/me/saved` 응답(같은 `SpotPage` 스키마 + 항목별 `saved_at`). `saved_at`이 없으면 `fallbackDate`.
+    func toSavedPage(fallbackDate: Date) -> SavedPage {
+        SavedPage(
+            items: items.compactMap { dto in
+                dto.toDomain().map { SavedSpot(spot: $0, savedAt: dto.savedAt ?? fallbackDate) }
+            },
+            nextCursor: nextCursor)
     }
 }
 
@@ -105,4 +119,24 @@ struct GeoReverseDTO: Decodable, Sendable {
 struct ErrorDTO: Decodable, Sendable {
     let code: String
     let message: String
+}
+
+/// `components.schemas.SavedImportRequest`
+struct SavedImportRequestDTO: Encodable, Sendable {
+    let spotIDs: [String]
+
+    enum CodingKeys: String, CodingKey {
+        case spotIDs = "spot_ids"
+    }
+}
+
+/// `components.schemas.SavedImportResult`
+struct SavedImportResultDTO: Decodable, Sendable {
+    let imported: Int
+    let skippedUnknown: Int
+
+    enum CodingKeys: String, CodingKey {
+        case imported = "imported"
+        case skippedUnknown = "skipped_unknown"
+    }
 }

@@ -9,16 +9,24 @@ public struct SettingsView: View {
     @State private var showsSources = false
     @State private var showsLicenses = false
     @State private var browser: BrowserLink?
+    @State private var confirmingLogout = false
+    @State private var showsDeleteAccount = false
     @Environment(\.openURL) private var openURL
     @Environment(\.scenePhase) private var scenePhase
+    let onAccountDeleted: () -> Void
 
-    public init(viewModel: SettingsViewModel) {
+    /// - Parameter onAccountDeleted: 탈퇴 완료 화면의 **확인** → 탭을 처음 상태로, 주변 탭 홈(S1)으로.
+    public init(viewModel: SettingsViewModel, onAccountDeleted: @escaping () -> Void = {}) {
         _viewModel = State(initialValue: viewModel)
+        self.onAccountDeleted = onAccountDeleted
     }
 
     public var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
+                if viewModel.account != nil {
+                    group("계정") { accountRows }
+                }
                 group("위치") {
                     SettingsRow(title: "위치 권한", value: viewModel.permissionText, chevron: true) {
                         if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
@@ -69,9 +77,41 @@ public struct SettingsView: View {
         .sheet(item: $browser) { link in
             SafariView(url: link.url).ignoresSafeArea()
         }
+        .navigationDestination(isPresented: $showsDeleteAccount) {
+            if let account = viewModel.account {
+                DeleteAccountView(viewModel: DeleteAccountViewModel(actions: account), onFinished: onAccountDeleted)
+            }
+        }
+        .alert(SettingsViewModel.logoutTitle, isPresented: $confirmingLogout) {
+            Button("로그아웃") { Task { await viewModel.logout() } }
+            Button("취소", role: .cancel) {}
+        } message: {
+            Text(SettingsViewModel.logoutMessage)
+        }
         .hzToast(message: $viewModel.toastMessage)
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { viewModel.refresh() }
+        }
+    }
+
+    /// 로그인 전: **로그인** 행 하나. 로그인 후: 계정 행(제공자 표시) · 로그아웃 · 회원 탈퇴 (DESIGN §6.19).
+    @ViewBuilder private var accountRows: some View {
+        if let provider = viewModel.provider, let title = viewModel.accountTitle {
+            HStack(spacing: HZSpace.s3) {
+                ProviderBadge(provider)
+                Text(title)
+                    .font(Font.hz.body)
+                    .foregroundStyle(Color.hz.textPrimary)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, HZSpace.screen)
+            .frame(minHeight: 56)
+            .accessibilityElement(children: .combine)
+            SettingsRow(title: "로그아웃", chevron: true) { confirmingLogout = true }
+            SettingsRow(title: "회원 탈퇴", chevron: true, secondary: true) { showsDeleteAccount = true }
+        } else {
+            SettingsRow(title: "로그인", chevron: true) { viewModel.login() }
+                .accessibilityHint("로그인 창이 열려요")
         }
     }
 
@@ -93,6 +133,8 @@ struct SettingsRow: View {
     let title: String
     var value: String?
     var chevron = false
+    /// 위계만 낮춘 글자(회원 탈퇴) — text.secondary.
+    var secondary = false
     var action: (() -> Void)?
 
     var body: some View {
@@ -108,7 +150,7 @@ struct SettingsRow: View {
         HStack(spacing: HZSpace.s2) {
             Text(title)
                 .font(Font.hz.body)
-                .foregroundStyle(Color.hz.textPrimary)
+                .foregroundStyle(secondary ? Color.hz.textSecondary : Color.hz.textPrimary)
             Spacer(minLength: HZSpace.s3)
             if let value {
                 Text(value)
