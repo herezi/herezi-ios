@@ -22,6 +22,7 @@ public final class SettingsViewModel {
     ]
 
     /// 이용약관·개인정보 처리방침 (S7 로그인 시트와 같은 값 — `SpotLinks`).
+    public static let noticesURL = SpotLinks.noticesURL
     public static let termsURL = SpotLinks.termsURL
     public static let privacyURL = SpotLinks.privacyURL
 

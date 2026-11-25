@@ -31,6 +31,8 @@ Sources/
                          클러스터링 계산은 Domain/MapClustering.swift(SpotClusterer, 단위 테스트)
   Features/Nearby/       "지금 내 주변" 화면 + NearbyViewModel
   Features/SpotDetail/   상세 화면
+  Features/Saved/        저장 탭(S4). 설정 톱니 없음
+  Features/Settings/     MY 탭 루트 = 설정(S6). 하단 탭은 주변·지도·저장·MY (DESIGN §6.12, App/HereziApp.swift)
   App/                   조립(composition root), CoreLocation 어댑터
 Tests/HereziTests/       단위 테스트(Swift Testing) + Fixtures/ (계약 형태의 JSON)
 scripts/                 sync-api, check-architecture, check-api-drift, pick-simulator
