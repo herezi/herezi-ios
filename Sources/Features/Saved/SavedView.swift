@@ -7,16 +7,14 @@ import SwiftUI
 public struct SavedView: View {
     @State private var viewModel: SavedViewModel
     let onBrowse: () -> Void
-    let onSettings: (() -> Void)?
 
     @State private var toast: HZToast?
     @State private var confirmingClear = false
 
-    /// - Parameter onSettings: 상단 바 오른쪽 톱니 → 설정(S6).
-    public init(viewModel: SavedViewModel, onBrowse: @escaping () -> Void = {}, onSettings: (() -> Void)? = nil) {
+    /// 설정 톱니는 없다 — 설정은 하단 MY 탭(DESIGN §6.12).
+    public init(viewModel: SavedViewModel, onBrowse: @escaping () -> Void = {}) {
         _viewModel = State(initialValue: viewModel)
         self.onBrowse = onBrowse
-        self.onSettings = onSettings
     }
 
     public var body: some View {
@@ -25,13 +23,6 @@ public struct SavedView: View {
             .navigationTitle("저장")
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
-                if let onSettings, !viewModel.isEditing {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Button(action: onSettings) { Image(systemName: "gearshape") }
-                            .foregroundStyle(Color.hz.iconPrimary)
-                            .accessibilityLabel("설정")
-                    }
-                }
                 if viewModel.canEdit {
                     ToolbarItem(placement: .topBarTrailing) {
                         Button(viewModel.isEditing ? "완료" : "편집") {

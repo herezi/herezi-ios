@@ -17,6 +17,12 @@ import UIKit
 struct HereziApp: App {
     @State private var app = AppModel()
 
+    init() {
+        // 탭 바: 선택 = 잉크(`.tint`), 비선택 = gray500 (DESIGN §6.12).
+        // iOS 26 Liquid Glass 탭 바는 이 값을 무시하고 시스템 색을 쓴다(시뮬레이터 iOS 26.3에서 확인). iOS 17–18용.
+        UITabBar.appearance().unselectedItemTintColor = UIColor(HZPalette.gray500)
+    }
+
     var body: some Scene {
         WindowGroup {
             RootView(app: app)
@@ -31,15 +37,14 @@ struct HereziApp: App {
 @MainActor
 @Observable
 final class AppModel {
-    /// 하단 탭 (DESIGN §6.12): 주변 · 지도 · 저장. 설정은 저장 탭 톱니.
+    /// 하단 탭 (DESIGN §6.12): 주변 · 지도 · 저장 · MY. MY 탭 루트 = 설정(S6).
     enum Tab: Hashable {
-        case nearby, map, saved
+        case nearby, map, saved, my
     }
 
     /// 탭 안에서 push 하는 화면.
     enum Route: Hashable {
         case search
-        case settings
         case spot(id: String)
         /// S1b 전체 목록 + 시작 필터. 지도에서 다른 동네를 다시 찾았으면 그 중심·위치명.
         case list(HomeListFilter, origin: Coordinate? = nil, placeName: String? = nil)
@@ -66,6 +71,10 @@ final class AppModel {
     var nearbyPath = NavigationPath()
     var mapPath = NavigationPath()
     var savedPath = NavigationPath()
+    var myPath = NavigationPath()
+    /// MY 탭 스택을 처음 상태로 다시 만든다. 설정의 하위 화면은 `navigationDestination(isPresented:)`라
+    /// 경로를 비워도 남을 수 있어서, 스택 자체를 새로 만들어 루트·맨 위로 돌린다.
+    var myRootID = UUID()
 
     init() {
         KakaoLoginProvider.initializeSDK()
@@ -94,6 +103,7 @@ final class AppModel {
             case .nearby: nearbyPath = NavigationPath()
             case .map: mapPath = NavigationPath()
             case .saved: savedPath = NavigationPath()
+            case .my: resetMyTab()
             }
         }
         tab = newTab
@@ -121,7 +131,13 @@ final class AppModel {
         nearbyPath = NavigationPath()
         mapPath = NavigationPath()
         savedPath = NavigationPath()
+        resetMyTab()
         tab = .nearby
+    }
+
+    private func resetMyTab() {
+        myPath = NavigationPath()
+        myRootID = UUID()
     }
 
     /// 로그인 성공 뒤(시트는 이미 닫힘): 기기 저장 옮기기 → 대기 동작 → 토스트들.
@@ -205,13 +221,25 @@ struct RootView: View {
             NavigationStack(path: $app.savedPath) {
                 SavedView(
                     viewModel: SavedViewModel(library: app.library, origin: app.knownCoordinate),
-                    onBrowse: app.goHome,
-                    onSettings: { app.savedPath.append(AppModel.Route.settings) }
+                    onBrowse: app.goHome
                 )
                 .destinations(app: app, root: self)
             }
             .tabItem { Label("저장", systemImage: "bookmark") }
             .tag(AppModel.Tab.saved)
+
+            NavigationStack(path: $app.myPath) {
+                SettingsView(
+                    viewModel: SettingsViewModel(
+                        permissions: app.location, appVersion: AppEnvironment.appVersion, build: AppEnvironment.build,
+                        osVersion: UIDevice.current.systemVersion, account: app.account),
+                    onAccountDeleted: app.resetAfterAccountDeletion
+                )
+                .destinations(app: app, root: self)
+            }
+            .id(app.myRootID)
+            .tabItem { Label("MY", systemImage: "person") }
+            .tag(AppModel.Tab.my)
         }
     }
 
@@ -236,12 +264,6 @@ struct RootView: View {
                 viewModel: SearchViewModel(
                     service: app.service, recents: app.recents, origin: app.home.coordinate ?? .seoulCityHall),
                 initialQuery: DebugLaunch.searchQuery)
-        case .settings:
-            SettingsView(
-                viewModel: SettingsViewModel(
-                    permissions: app.location, appVersion: AppEnvironment.appVersion, build: AppEnvironment.build,
-                    osVersion: UIDevice.current.systemVersion, account: app.account),
-                onAccountDeleted: app.resetAfterAccountDeletion)
         case .spot(let id):
             detail(id: id, initial: nil)
         case .list(let filter, let origin, let placeName):
@@ -365,7 +387,7 @@ enum AppEnvironment {
 ///
 ///     xcrun simctl launch booted com.herezi.app -HZScreen search -HZSearchQuery 광화문
 ///
-/// - `-HZScreen onboarding|home|list|map|map-selected|map-moved|search|saved|settings|detail|detail-ended|login`
+/// - `-HZScreen onboarding|home|list|map|map-selected|map-moved|search|saved|settings(=my)|detail|detail-ended|login`
 /// - `-HZSearchQuery <검색어>`: 검색 화면을 열자마자 조회
 /// - `-HZSeedSaved YES`: 샘플 볼거리를 기기 로컬 저장(v1.3 이전 저장)에 넣는다 — 첫 로그인 옮기기 확인용
 /// - `-HZFakeAuth kakao|apple|none`: 가짜 세션으로 시작(로그인 상태 화면 확인용)
@@ -420,9 +442,7 @@ enum DebugLaunch {
                 #endif
             }
         case "saved": app.tab = .saved
-        case "settings":
-            app.tab = .saved
-            app.savedPath.append(AppModel.Route.settings)
+        case "settings", "my": app.tab = .my
         case "detail": app.nearbyPath.append(AppModel.Route.spot(id: "sample-1"))
         case "detail-ended": app.nearbyPath.append(AppModel.Route.spot(id: SampleSpots.endedID))
         case "login":

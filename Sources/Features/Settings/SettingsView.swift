@@ -3,7 +3,8 @@ import Domain
 import SwiftUI
 import UIKit
 
-/// S6 설정 (herezi-api docs/design/screens/S6-settings.md). 평평한 흰 목록, 행 높이 56, 구분선 없음.
+/// S6 설정 (herezi-api docs/design/screens/S6-settings.md). 하단 MY 탭의 루트 화면(DESIGN §6.12) — 큰 제목 "MY", 뒤로 없음.
+/// 평평한 흰 목록, 행 높이 56, 구분선 없음. 하위 화면(정보 출처·라이선스·탈퇴 확인)은 MY 탭 스택 안에서 push.
 public struct SettingsView: View {
     @State private var viewModel: SettingsViewModel
     @State private var showsSources = false
@@ -70,7 +71,7 @@ public struct SettingsView: View {
             }
         }
         .background(Color.hz.bgPrimary)
-        .navigationTitle("설정")
+        .navigationTitle("MY")
         .navigationBarTitleDisplayMode(.large)
         .navigationDestination(isPresented: $showsSources) { SourcesView() }
         .navigationDestination(isPresented: $showsLicenses) { LicensesView() }
